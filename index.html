@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>교보빌딩 1층 실내 지도 (클릭 시 생성 v3.0)</title>
+    <title>교보빌딩 1층 실내 지도 (라벨 숨김 기능 v4.0)</title>
     <meta name="viewport" content="initial-scale=1.0, user-scalable=no">
     <meta charset="utf-8">
     <style>
@@ -18,19 +18,30 @@
 <body>
     <div id="map"></div>
     <script>
-        // 전역 변수로 선언하여 initMap 함수 외부에서도 접근 가능하게 합니다.
-        let historicalOverlay = null; // Ground Overlay 객체를 저장할 변수
-        let isOverlayVisible = false; // 이미지 표시 여부 추적 변수
+        let historicalOverlay = null; 
+        let isOverlayVisible = false;
+
+        // 1. 라벨을 숨기는 스타일 정의 (숨기고자 하는 요소를 추가/제거할 수 있습니다.)
+        const HIDE_LABELS_STYLE = [
+            {
+                featureType: "poi",
+                elementType: "labels",
+                stylers: [{ visibility: "off" }]
+            },
+            {
+                featureType: "road",
+                elementType: "labels",
+                stylers: [{ visibility: "off" }]
+            }
+            // 필요한 경우 'administrative', 'transit' 등 다른 요소도 숨길 수 있습니다.
+        ];
 
         function initMap() {
-            // 1. 이미지 경계 좌표 설정
+            // 경계 및 중심 좌표 설정 (이전과 동일)
             const imageBounds = {
-                north: 37.571352,
-                south: 37.570529,
-                east: 126.978045,
-                west: 126.977640
+                north: 37.571352, south: 37.570529,
+                east: 126.978045, west: 126.977640
             };
-
             const kyoboCenter = {  
                 lat: (imageBounds.north + imageBounds.south) / 2,  
                 lng: (imageBounds.east + imageBounds.west) / 2  
@@ -41,75 +52,59 @@
                 zoom: 18,
                 center: kyoboCenter,
                 mapTypeId: 'roadmap'
+                // ⭐ 초기에는 스타일을 적용하지 않음
             });
 
-            // 3. 영역 표시 및 이벤트 처리를 위한 Rectangle 생성 (초기 상태: 테두리만)
+            // 3. 영역 표시 및 이벤트 처리를 위한 Rectangle 생성 (이전과 동일)
             const rectangle = new google.maps.Rectangle({
-                strokeColor: '#FF0000',
-                strokeOpacity: 1.0,
-                strokeWeight: 2,
-                fillColor: '#FF0000',
-                fillOpacity: 0.0, // 평소에는 채우기 투명
-                bounds: imageBounds,
-                editable: false, 
-                zIndex: 10,
-                map: map
+                strokeColor: '#FF0000', strokeOpacity: 1.0, strokeWeight: 2,
+                fillColor: '#FF0000', fillOpacity: 0.0, 
+                bounds: imageBounds, editable: false, zIndex: 10, map: map
             });
 
             // 4. 이벤트 리스너 설정
             
-            // A. 마우스를 올렸을 때 (mouseover) : 반투명하게 채우기
+            // 마우스 오버/아웃 이벤트 (이전과 동일)
             google.maps.event.addListener(rectangle, 'mouseover', function() {
-                if (!isOverlayVisible) {
-                    rectangle.setOptions({ fillOpacity: 0.2 });
-                }
+                if (!isOverlayVisible) { rectangle.setOptions({ fillOpacity: 0.2 }); }
             });
-
-            // B. 마우스가 벗어났을 때 (mouseout) : 채우기 제거
             google.maps.event.addListener(rectangle, 'mouseout', function() {
-                if (!isOverlayVisible) {
-                    rectangle.setOptions({ fillOpacity: 0.0 });
-                }
+                if (!isOverlayVisible) { rectangle.setOptions({ fillOpacity: 0.0 }); }
             });
 
-            // C. 영역을 클릭했을 때 (click) : 이미지 토글 (생성/표시 또는 숨김)
+            // C. 영역을 클릭했을 때 (click) : 이미지 토글 및 스타일 변경 (⭐수정 포인트)
             google.maps.event.addListener(rectangle, 'click', function() {
                 if (!isOverlayVisible) {
-                    // Ground Overlay가 아직 생성되지 않았다면 생성
+                    // 1. Ground Overlay 생성/표시 (이전과 동일)
                     if (historicalOverlay === null) {
-                        const image_url = '1F_2.jpg';
                         historicalOverlay = new google.maps.GroundOverlay(
-                            image_url,
-                            imageBounds,
-                            { opacity: 0.8 }
+                            '1F_2.jpg', imageBounds, { opacity: 0.8 }
                         );
                     }
-
-                    // 이미지 표시
                     historicalOverlay.setMap(map);
                     isOverlayVisible = true;
                     
-                    // 사각형 스타일 변경 (클릭됨 강조)
-                    rectangle.setOptions({
-                        fillOpacity: 0.0,
-                        strokeWeight: 4 
-                    });
+                    // 2. 라벨 숨김 스타일 적용 ⭐
+                    map.setOptions({ styles: HIDE_LABELS_STYLE });
+
+                    // 3. 사각형 스타일 변경
+                    rectangle.setOptions({ fillOpacity: 0.0, strokeWeight: 4 });
                 } else {
-                    // 이미지 숨김
+                    // 1. 이미지 숨김 (이전과 동일)
                     historicalOverlay.setMap(null);
                     isOverlayVisible = false;
 
-                    // 사각형 스타일 복원
-                    rectangle.setOptions({
-                        strokeWeight: 2,
-                        fillOpacity: 0.0 // 마우스가 위에 있어도 투명하게 시작
-                    });
+                    // 2. 원래 지도 스타일 복원 (styles: null로 설정하여 제거) ⭐
+                    map.setOptions({ styles: null });
+
+                    // 3. 사각형 스타일 복원
+                    rectangle.setOptions({ strokeWeight: 2, fillOpacity: 0.0 });
                 }
             });
         }
     </script>
     <script async defer
         src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBFx8u1rY7G06Ho4y-nYPLQ4RKy4zsW_og&callback=initMap">
-        </script>
+    </script>
 </body>
 </html>
