@@ -1,28 +1,86 @@
 <!DOCTYPE html>
-<html>
+<html lang="ko">
 <head>
-    <title>교보빌딩 1층 실내 지도 (최종 수정본 v11.0)</title>
-    <meta name="viewport" content="initial-scale=1.0, user-scalable=no">
+    <title>교보빌딩 1층 실내 지도 (수정 완료본 v9.1)</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <meta charset="utf-8">
     <style>
         html, body {
             height: 100%;
             margin: 0;
             padding: 0;
+            font-family: 'Malgun Gothic', '맑은 고딕', sans-serif;
         }
         #map {
             height: 100%;
         }
+        #info-panel {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 10px 15px;
+            border-radius: 5px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+            z-index: 100;
+            max-width: 300px;
+        }
+        #info-panel h3 {
+            margin: 0 0 8px 0;
+            color: #333;
+            font-size: 16px;
+        }
+        #info-panel p {
+            margin: 5px 0;
+            font-size: 14px;
+            color: #666;
+        }
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(255, 255, 255, 0.9);
+            padding: 15px 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+            z-index: 100;
+            display: none;
+        }
+        .button {
+            background-color: #4285F4;
+            border: none;
+            color: white;
+            padding: 8px 12px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 14px;
+            margin: 4px 2px;
+            cursor: pointer;
+            border-radius: 4px;
+        }
     </style>
 </head>
 <body>
+    <div id="info-panel">
+        <h3>교보빌딩 1층 실내지도</h3>
+        <p>건물 영역을 클릭하면 실내지도가 표시됩니다.</p>
+        <p>다시 클릭하면 지도로 돌아갑니다.</p>
+        <button id="toggle-overlay" class="button">실내지도 토글</button>
+    </div>
+    
+    <div id="loading">실내지도 로딩 중...</div>
+    
     <div id="map"></div>
+
     <script>
         // =================================================================
         // 1. 전역 변수 및 상수 정의
         // =================================================================
         let customOverlay = null; 
         let isOverlayVisible = false;
+        let map, buildingPolygon;
 
         // 지도 라벨 숨김 스타일
         const CLEAN_MAP_STYLE = [
@@ -56,102 +114,100 @@
             east: 126.978171, west: 126.977638
         };
 
+        // =================================================================
+        // 2. CustomImageOverlay 클래스 정의
+        // =================================================================
+        class CustomImageOverlay extends google.maps.OverlayView {
+            constructor(bounds, imageUrl, map) {
+                super();
+                this.bounds = bounds;
+                this.imageUrl = imageUrl;
+                this.map = map;
+                this.div = null;
+                
+                // 오버레이를 지도에 연결
+                this.setMap(map);
+            }
 
-        // =================================================================
-        // 2. initMap 함수: API 로드 후 호출되는 메인 함수
-        // =================================================================
-        function initMap() {
-            // A. CustomImageOverlay 클래스를 initMap 내부로 이동
-            class CustomImageOverlay extends google.maps.OverlayView {
-                constructor(map, imageUrl, cornerCoords) {
-                    super();
-                    this.map = map;
-                    this.imageUrl = imageUrl;
-                    this.cornerCoords = cornerCoords;
+            onAdd() {
+                this.div = document.createElement('div');
+                this.div.style.borderStyle = 'none';
+                this.div.style.borderWidth = '0px';
+                this.div.style.position = 'absolute';
+                this.div.style.opacity = '0.9';
+                this.div.style.boxShadow = '0 4px 12px rgba(0,0,0,0.3)';
+                this.div.style.borderRadius = '4px';
+
+                // 이미지 생성
+                const img = document.createElement('img');
+                img.src = this.imageUrl;
+                img.style.width = '100%';
+                img.style.height = '100%';
+                img.style.position = 'absolute';
+                img.style.left = '0';
+                img.style.top = '0';
+                this.div.appendChild(img);
+
+                // 오버레이를 오버레이레이어에 추가
+                const panes = this.getPanes();
+                panes.overlayLayer.appendChild(this.div);
+                
+                // 초기에는 숨김
+                this.div.style.display = 'none';
+            }
+
+            draw() {
+                if (!this.div) return;
+                
+                const overlayProjection = this.getProjection();
+                const sw = overlayProjection.fromLatLngToDivPixel(this.bounds.getSouthWest());
+                const ne = overlayProjection.fromLatLngToDivPixel(this.bounds.getNorthEast());
+
+                // DIV 위치와 크기 설정
+                this.div.style.left = sw.x + 'px';
+                this.div.style.top = ne.y + 'px';
+                this.div.style.width = (ne.x - sw.x) + 'px';
+                this.div.style.height = (sw.y - ne.y) + 'px';
+            }
+
+            onRemove() {
+                if (this.div) {
+                    this.div.parentNode.removeChild(this.div);
                     this.div = null;
                 }
+            }
 
-                onAdd() {
-                    this.div = document.createElement('div');
-                    this.div.style.position = 'absolute';
-                    this.div.style.overflow = 'hidden';
-                    this.div.style.opacity = '0.8';
-
-                    const img = document.createElement('img');
-                    img.src = this.imageUrl;
-                    img.style.position = 'absolute';
-                    img.style.pointerEvents = 'none';
-
-                    // ⭐ 이미지 로드 디버깅 로직 (성공/실패 확인)
-                    img.onload = () => {
-                        console.log("✅ 이미지 로드 성공!");
-                        this.div.style.backgroundColor = 'rgba(0, 255, 0, 0.1)';
-                        // draw()를 다시 호출하여 최종 크기를 올바르게 계산하도록 유도 (안전 장치)
-                        this.draw(); 
-                    };
-
-                    img.onerror = () => {
-                        console.error("❌ 이미지 로드 실패! 파일 이름 및 경로를 확인하세요:", this.imageUrl);
-                        this.div.style.backgroundColor = 'rgba(255, 0, 0, 0.3)';
-                    };
-
-                    this.div.appendChild(img);
-                    const panes = this.getPanes();
-                    panes.overlayLayer.appendChild(this.div);
-                    
-                    this.div.style.visibility = 'hidden';
+            hide() {
+                if (this.div) {
+                    this.div.style.display = 'none';
                 }
-
-                draw() {
-                    if (!this.div) return;
-                    const projection = this.getProjection();
-                    if (!projection) return;
-
-                    const imgElement = this.div.querySelector('img');
-                    if (!imgElement) return;
-
-                    // 4개 꼭짓점의 위도/경도를 픽셀 좌표로 변환
-                    const pixels = this.cornerCoords.map(latLng => projection.fromLatLngToDivPixel(new google.maps.LatLng(latLng.lat, latLng.lng)));
-                    const p_nw = pixels[0], p_ne = pixels[1], p_se = pixels[2], p_sw = pixels[3];
-
-                    // 이미지 DIV의 Bounding Box 계산
-                    let minX = Math.min(p_nw.x, p_ne.x, p_se.x, p_sw.x);
-                    let minY = Math.min(p_nw.y, p_ne.y, p_se.y, p_sw.y);
-                    let maxX = Math.max(p_nw.x, p_ne.x, p_se.x, p_sw.x);
-                    let maxY = Math.max(p_nw.y, p_ne.y, p_se.y, p_sw.y);
-
-                    // DIV 위치와 크기 설정 (Bounding Box)
-                    this.div.style.left = minX + 'px';
-                    this.div.style.top = minY + 'px';
-                    this.div.style.width = (maxX - minX) + 'px';
-                    this.div.style.height = (maxY - minY) + 'px';
-
-                    // ⭐ 수정된 부분: 이미지 크기를 DIV 컨테이너에 꽉 채우도록 설정
-                    imgElement.style.width = '100%'; 
-                    imgElement.style.height = '100%';
-                    
-                    // DIV 내에서 이미지를 NW 꼭짓점 위치로 옮겨 비틀림 위치를 맞춥니다.
-                    const offsetX = p_nw.x - minX;
-                    const offsetY = p_nw.y - minY;
-                    
-                    imgElement.style.transform = `translate3d(${offsetX}px, ${offsetY}px, 0)`;
+            }
+            
+            show() {
+                if (this.div) {
+                    this.div.style.display = 'block';
                 }
-
-                onRemove() {
-                    if (this.div) {
-                        this.div.parentNode.removeChild(this.div);
-                        this.div = null;
+            }
+            
+            toggle() {
+                if (this.div) {
+                    if (this.div.style.display === 'none') {
+                        this.show();
+                    } else {
+                        this.hide();
                     }
                 }
+            }
+            
+            isVisible() {
+                return this.div && this.div.style.display !== 'none';
+            }
+        }
 
-                hide() {
-                    if (this.div) this.div.style.visibility = 'hidden';
-                }
-                show() {
-                    if (this.div) this.div.style.visibility = 'visible';
-                }
-            } // CustomImageOverlay 클래스 정의 끝
-
+        // =================================================================
+        // 3. initMap 함수: API 로드 후 호출되는 메인 함수
+        // =================================================================
+        function initMap() {
             // 지도 중심 좌표 설정
             const kyoboCenter = {  
                 lat: (IMAGE_BOUNDS.north + IMAGE_BOUNDS.south) / 2,  
@@ -159,57 +215,117 @@
             };
 
             // 지도 생성
-            const map = new google.maps.Map(document.getElementById('map'), {
-                zoom: 18, center: kyoboCenter, mapTypeId: 'roadmap' 
+            map = new google.maps.Map(document.getElementById('map'), {
+                zoom: 18, 
+                center: kyoboCenter, 
+                mapTypeId: 'roadmap',
+                gestureHandling: 'greedy'
             });
 
             // 스타일 지도 설정
             const cleanMapType = new google.maps.StyledMapType(CLEAN_MAP_STYLE, { name: "Clean Map" });
             map.mapTypes.set('clean_map', cleanMapType);
-            
-            // Polygon 생성 (8개 꼭짓점 외곽선)
-            const buildingPolygon = new google.maps.Polygon({
-                paths: BUILDING_PERIMETER, 
-                strokeColor: '#FF0000', strokeOpacity: 1.0, strokeWeight: 2,
-                fillColor: '#FF0000', fillOpacity: 0.0, 
-                zIndex: 10, map: map
-            });
+
+            // 이미지 오버레이를 위한 경계 상자 생성
+            const imageBounds = new google.maps.LatLngBounds(
+                new google.maps.LatLng(IMAGE_BOUNDS.south, IMAGE_BOUNDS.west),
+                new google.maps.LatLng(IMAGE_BOUNDS.north, IMAGE_BOUNDS.east)
+            );
 
             // CustomImageOverlay 객체 생성
-            customOverlay = new CustomImageOverlay(null, '1F_2.png', IMAGE_CORNERS);
+            customOverlay = new CustomImageOverlay(imageBounds, '1F_2.png', map);
+
+            // Polygon 생성 (8개 꼭짓점 외곽선)
+            buildingPolygon = new google.maps.Polygon({
+                paths: BUILDING_PERIMETER, 
+                strokeColor: '#FF0000', 
+                strokeOpacity: 1.0, 
+                strokeWeight: 2,
+                fillColor: '#FF0000', 
+                fillOpacity: 0.0, 
+                zIndex: 10, 
+                map: map,
+                clickable: true
+            });
 
             // 이벤트 리스너 설정
             
             // 마우스 오버/아웃 이벤트
-            google.maps.event.addListener(buildingPolygon, 'mouseover', function() {
-                if (!isOverlayVisible) { buildingPolygon.setOptions({ fillOpacity: 0.2 }); }
+            buildingPolygon.addListener('mouseover', function() {
+                if (!isOverlayVisible) { 
+                    buildingPolygon.setOptions({ 
+                        fillOpacity: 0.2,
+                        strokeWeight: 3
+                    }); 
+                }
             });
-            google.maps.event.addListener(buildingPolygon, 'mouseout', function() {
-                if (!isOverlayVisible) { buildingPolygon.setOptions({ fillOpacity: 0.0 }); }
+            
+            buildingPolygon.addListener('mouseout', function() {
+                if (!isOverlayVisible) { 
+                    buildingPolygon.setOptions({ 
+                        fillOpacity: 0.0,
+                        strokeWeight: 2
+                    }); 
+                }
             });
 
             // 클릭 이벤트 (이미지 토글 및 스타일 변경)
-            google.maps.event.addListener(buildingPolygon, 'click', function() {
-                if (!isOverlayVisible) {
-                    // 이미지 표시 및 지도 스타일 변경
-                    customOverlay.setMap(map); 
+            buildingPolygon.addListener('click', function() {
+                toggleOverlay();
+            });
+
+            // 토글 버튼 이벤트
+            document.getElementById('toggle-overlay').addEventListener('click', function() {
+                toggleOverlay();
+            });
+        }
+
+        // =================================================================
+        // 4. 오버레이 토글 함수
+        // =================================================================
+        function toggleOverlay() {
+            if (!isOverlayVisible) {
+                // 이미지 표시 및 지도 스타일 변경
+                document.getElementById('loading').style.display = 'block';
+                
+                // 약간의 지연을 두어 로딩 표시가 보이도록 함
+                setTimeout(function() {
                     customOverlay.show();
                     isOverlayVisible = true;
                     map.setMapTypeId('clean_map'); 
-                    buildingPolygon.setOptions({ fillOpacity: 0.0, strokeWeight: 4 });
-                } else {
-                    // 이미지 숨김 및 지도 스타일 복원
-                    customOverlay.hide();
-                    customOverlay.setMap(null); 
-                    isOverlayVisible = false;
-                    map.setMapTypeId('roadmap');
-                    buildingPolygon.setOptions({ strokeWeight: 2, fillOpacity: 0.0 });
-                }
-            });
+                    buildingPolygon.setOptions({ 
+                        fillOpacity: 0.0, 
+                        strokeWeight: 4,
+                        strokeColor: '#4285F4'
+                    });
+                    
+                    // 로딩 숨김
+                    document.getElementById('loading').style.display = 'none';
+                }, 300);
+            } else {
+                // 이미지 숨김 및 지도 스타일 복원
+                customOverlay.hide();
+                isOverlayVisible = false;
+                map.setMapTypeId('roadmap');
+                buildingPolygon.setOptions({ 
+                    strokeWeight: 2, 
+                    fillOpacity: 0.0,
+                    strokeColor: '#FF0000'
+                });
+            }
+        }
+
+        // =================================================================
+        // 5. 에러 처리
+        // =================================================================
+        function gm_authFailure() {
+            alert('Google Maps 로드에 실패했습니다. API 키를 확인해주세요.');
         }
     </script>
+    
+    <!-- Google Maps API - 실제 배포 시 API 키를 환경 변수로 관리하세요 -->
     <script async defer
         src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBFx8u1rY7G06Ho4y-nYPLQ4RKy4zsW_og&callback=initMap">
-        </script>
+    </script>
 </body>
 </html>
