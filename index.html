@@ -34,14 +34,14 @@
         ];
 
         // ⭐ 새로운 두 꼭짓점을 기반으로 한 직사각형 이미지 경계 (GroundOverlay 사용) ⭐
-        // Top-Left (NW): (37.571347, 126.977643)
-        // Bottom-Right (SE): (37.570538, 126.978168)
-        const imageBounds = {
-            north: 37.571347, // 가장 높은 위도 (Top-Left의 위도)
-            south: 37.570538, // 가장 낮은 위도 (Bottom-Right의 위도)
-            west: 126.977643,  // 가장 서쪽 경도 (Top-Left의 경도)
-            east: 126.978168  // 가장 동쪽 경도 (Bottom-Right의 경도)
-        };
+        // Top-Left (NW): (37.571375, 126.977571)
+// Bottom-Right (SE): (37.570502, 126.978179)
+const imageBounds = {
+    north: 37.571375, // 가장 높은 위도
+    south: 37.570502, // 가장 낮은 위도
+    west: 126.977571,  // 가장 서쪽 경도
+    east: 126.978179  // 가장 동쪽 경도
+};
         
         // 지도 라벨 숨김 스타일 정의
         const CLEAN_MAP_STYLE = [
@@ -50,11 +50,13 @@
         ];
 
         function initMap() {
-            // 새로운 경계를 기반으로 지도 중심 좌표 계산
-            const kyoboCenter = {  
-                lat: (imageBounds.north + imageBounds.south) / 2, // 37.5709425
-                lng: (imageBounds.east + imageBounds.west) / 2  // 126.9779055
-            };
+    // ⭐ 수정할 부분: 새로운 경계를 기반으로 지도 중심 좌표 계산
+    const kyoboCenter = {  
+        lat: (imageBounds.north + imageBounds.south) / 2, 
+        lng: (imageBounds.east + imageBounds.west) / 2
+    };
+
+    // ... (나머지 코드는 그대로 유지됩니다)
 
             // 3. 지도 생성
             const map = new google.maps.Map(document.getElementById('map'), {
@@ -122,3 +124,4 @@
         </script>
 </body>
 </html>
+
