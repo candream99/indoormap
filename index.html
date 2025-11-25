@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>교보빌딩 1층 실내 지도 (Styled Map 적용 v6.0)</title>
+    <title>교보빌딩 1층 실내 지도 (최종 통합본)</title>
     <meta name="viewport" content="initial-scale=1.0, user-scalable=no">
     <meta charset="utf-8">
     <style>
@@ -18,98 +18,187 @@
 <body>
     <div id="map"></div>
     <script>
-        let historicalOverlay = null; 
+        // =================================================================
+        // 1. 전역 변수 및 상수 정의
+        // =================================================================
+        let customOverlay = null; 
         let isOverlayVisible = false;
 
-        // 1. 라벨이 없는 깨끗한 지도 스타일 정의 (지도 타일 자체를 수정)
+        // 지도 라벨 숨김 스타일 (클릭 시 적용)
         const CLEAN_MAP_STYLE = [
-            {
-                featureType: "all",
-                elementType: "labels",
-                stylers: [{ visibility: "off" }] // 모든 라벨 숨김
-            },
-            {
-                featureType: "all",
-                elementType: "geometry",
-                stylers: [{ saturation: -100 }] // 모든 지형지물을 흑백으로 처리
-            }
+            { featureType: "all", elementType: "labels", stylers: [{ visibility: "off" }] },
+            { featureType: "all", elementType: "geometry", stylers: [{ saturation: -100 }] }
         ];
 
-        // 2. 기본 지도를 위한 스타일 (라벨을 다시 보이게 함)
-        const DEFAULT_MAP_STYLE = null;
+        // 8개 꼭짓점 Polygon 데이터 (클릭/호버 영역)
+        const BUILDING_PERIMETER = [
+            { lat: 37.571348, lng: 126.977638 },
+            { lat: 37.571352, lng: 126.978030 },
+            { lat: 37.571259, lng: 126.978032 },
+            { lat: 37.571259, lng: 126.978156 },
+            { lat: 37.570850, lng: 126.978161 },
+            { lat: 37.570849, lng: 126.978041 },
+            { lat: 37.570532, lng: 126.978044 },
+            { lat: 37.570531, lng: 126.977657 }
+        ];
 
+        // 4개 꼭짓점 이미지 경계 데이터 (Image Overlay 배치용)
+        const IMAGE_CORNERS = [
+            { lat: 37.571348, lng: 126.977638 }, // NW
+            { lat: 37.571353, lng: 126.978152 }, // NE
+            { lat: 37.570542, lng: 126.978171 }, // SE
+            { lat: 37.570527, lng: 126.977660 }  // SW
+        ];
+        
+        // 4개 꼭짓점 기반 전체 경계 (지도 중심 계산용)
+        const IMAGE_BOUNDS = {
+            north: 37.571353, south: 37.570527,
+            east: 126.978171, west: 126.977638
+        };
+
+
+        // =================================================================
+        // 2. CustomImageOverlay 클래스 정의 (OverlayView 확장)
+        // =================================================================
+        class CustomImageOverlay extends google.maps.OverlayView {
+            constructor(map, imageUrl, cornerCoords) {
+                super();
+                this.map = map;
+                this.imageUrl = imageUrl;
+                this.cornerCoords = cornerCoords;
+                this.div = null;
+            }
+
+            onAdd() {
+                this.div = document.createElement('div');
+                this.div.style.position = 'absolute';
+                this.div.style.overflow = 'hidden';
+                this.div.style.opacity = '0.8';
+
+                const img = document.createElement('img');
+                img.src = this.imageUrl;
+                img.style.position = 'absolute';
+                img.style.pointerEvents = 'none'; // 이미지 위에서 클릭 이벤트 무시
+
+                this.div.appendChild(img);
+
+                const panes = this.getPanes();
+                panes.overlayLayer.appendChild(this.div);
+                
+                this.div.style.visibility = 'hidden';
+            }
+
+            draw() {
+                if (!this.div) return;
+                const projection = this.getProjection();
+                if (!projection) return;
+
+                const imgElement = this.div.querySelector('img');
+                if (!imgElement) return;
+
+                // 4개 꼭짓점의 위도/경도를 픽셀 좌표로 변환
+                const pixels = this.cornerCoords.map(latLng => projection.fromLatLngToDivPixel(new google.maps.LatLng(latLng.lat, latLng.lng)));
+                const p_nw = pixels[0], p_ne = pixels[1], p_se = pixels[2], p_sw = pixels[3];
+
+                // 이미지 DIV의 Bounding Box 계산
+                let minX = Math.min(p_nw.x, p_ne.x, p_se.x, p_sw.x);
+                let minY = Math.min(p_nw.y, p_ne.y, p_se.y, p_sw.y);
+                let maxX = Math.max(p_nw.x, p_ne.x, p_se.x, p_sw.x);
+                let maxY = Math.max(p_nw.y, p_ne.y, p_se.y, p_sw.y);
+
+                // DIV 위치와 크기 설정
+                this.div.style.left = minX + 'px';
+                this.div.style.top = minY + 'px';
+                this.div.style.width = (maxX - minX) + 'px';
+                this.div.style.height = (maxY - minY) + 'px';
+
+                // 이미지 변환 설정 (비틀림 처리는 복잡하여 Bounding Box 내에서 NW 꼭짓점만 정렬)
+                const offsetX = p_nw.x - minX;
+                const offsetY = p_nw.y - minY;
+                
+                imgElement.style.transform = `translate3d(${offsetX}px, ${offsetY}px, 0)`;
+                imgElement.style.width = (maxX - minX) + 'px';
+                imgElement.style.height = (maxY - minY) + 'px';
+            }
+
+            onRemove() {
+                if (this.div) {
+                    this.div.parentNode.removeChild(this.div);
+                    this.div = null;
+                }
+            }
+
+            hide() {
+                if (this.div) this.div.style.visibility = 'hidden';
+            }
+            show() {
+                if (this.div) this.div.style.visibility = 'visible';
+            }
+        }
+
+
+        // =================================================================
+        // 3. initMap 함수: 지도 초기화 및 이벤트 설정
+        // =================================================================
         function initMap() {
-            // 경계 및 중심 좌표 설정
-            const imageBounds = {
-                north: 37.571352, south: 37.570529,
-                east: 126.978045, west: 126.977640
-            };
+            // 지도 중심 좌표 설정
             const kyoboCenter = {  
-                lat: (imageBounds.north + imageBounds.south) / 2,  
-                lng: (imageBounds.east + imageBounds.west) / 2  
+                lat: (IMAGE_BOUNDS.north + IMAGE_BOUNDS.south) / 2,  
+                lng: (IMAGE_BOUNDS.east + IMAGE_BOUNDS.west) / 2  
             };
 
-            // 3. 지도 생성 (초기에는 기본 지도 유형 사용)
+            // 지도 생성
             const map = new google.maps.Map(document.getElementById('map'), {
-                zoom: 18,
-                center: kyoboCenter,
-                mapTypeId: 'roadmap' 
+                zoom: 18, center: kyoboCenter, mapTypeId: 'roadmap' 
             });
 
-            // 4. 깨끗한 스타일의 새로운 지도 유형을 정의하고 추가합니다.
-            const cleanMapType = new google.maps.StyledMapType(CLEAN_MAP_STYLE, {
-                name: "Clean Map"
-            });
-            map.mapTypes.set('clean_map', cleanMapType); // 'clean_map'이라는 새 유형 추가
+            // 스타일 지도 설정
+            const cleanMapType = new google.maps.StyledMapType(CLEAN_MAP_STYLE, { name: "Clean Map" });
+            map.mapTypes.set('clean_map', cleanMapType);
             
-            // 5. Rectangle 생성 및 이벤트 리스너 설정 (mouseover/mouseout은 동일)
-            const rectangle = new google.maps.Rectangle({
+            // Polygon 생성 (8개 꼭짓점 외곽선)
+            const buildingPolygon = new google.maps.Polygon({
+                paths: BUILDING_PERIMETER, 
                 strokeColor: '#FF0000', strokeOpacity: 1.0, strokeWeight: 2,
                 fillColor: '#FF0000', fillOpacity: 0.0, 
-                bounds: imageBounds, editable: false, zIndex: 10, map: map
+                zIndex: 10, map: map
             });
 
-            google.maps.event.addListener(rectangle, 'mouseover', function() {
-                if (!isOverlayVisible) { rectangle.setOptions({ fillOpacity: 0.2 }); }
+            // CustomImageOverlay 객체 생성 (4개 꼭짓점 이미지)
+            customOverlay = new CustomImageOverlay(null, '1F_2.png', IMAGE_CORNERS);
+
+            // 이벤트 리스너 설정
+            
+            // 마우스 오버/아웃 이벤트
+            google.maps.event.addListener(buildingPolygon, 'mouseover', function() {
+                if (!isOverlayVisible) { buildingPolygon.setOptions({ fillOpacity: 0.2 }); }
             });
-            google.maps.event.addListener(rectangle, 'mouseout', function() {
-                if (!isOverlayVisible) { rectangle.setOptions({ fillOpacity: 0.0 }); }
+            google.maps.event.addListener(buildingPolygon, 'mouseout', function() {
+                if (!isOverlayVisible) { buildingPolygon.setOptions({ fillOpacity: 0.0 }); }
             });
 
-            // C. 영역을 클릭했을 때 (click) : 이미지 토글 및 지도 유형 변경 (⭐ 최종 수정)
-            google.maps.event.addListener(rectangle, 'click', function() {
+            // 클릭 이벤트 (이미지 토글 및 스타일 변경)
+            google.maps.event.addListener(buildingPolygon, 'click', function() {
                 if (!isOverlayVisible) {
-                    // 1. Ground Overlay 생성/표시
-                    if (historicalOverlay === null) {
-                        historicalOverlay = new google.maps.GroundOverlay(
-                            '1F_2.png', imageBounds, { opacity: 0.8 }
-                        );
-                    }
-                    historicalOverlay.setMap(map);
+                    // 이미지 표시 및 지도 스타일 변경
+                    customOverlay.setMap(map); 
+                    customOverlay.show();
                     isOverlayVisible = true;
-                    
-                    // 2. 지도 유형을 라벨이 없는 'clean_map'으로 변경하여 모든 글자를 제거합니다. ⭐
                     map.setMapTypeId('clean_map'); 
-
-                    // 3. 사각형 스타일 변경
-                    rectangle.setOptions({ fillOpacity: 0.0, strokeWeight: 4 });
+                    buildingPolygon.setOptions({ fillOpacity: 0.0, strokeWeight: 4 });
                 } else {
-                    // 1. 이미지 숨김
-                    historicalOverlay.setMap(null);
+                    // 이미지 숨김 및 지도 스타일 복원
+                    customOverlay.hide();
+                    customOverlay.setMap(null); 
                     isOverlayVisible = false;
-
-                    // 2. 지도 유형을 원래의 'roadmap'으로 복원합니다. ⭐
                     map.setMapTypeId('roadmap');
-
-                    // 3. 사각형 스타일 복원
-                    rectangle.setOptions({ strokeWeight: 2, fillOpacity: 0.0 });
+                    buildingPolygon.setOptions({ strokeWeight: 2, fillOpacity: 0.0 });
                 }
             });
         }
     </script>
     <script async defer
         src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBFx8u1rY7G06Ho4y-nYPLQ4RKy4zsW_og&callback=initMap">
-    </script>
+        </script>
 </body>
 </html>
-
