@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>교보빌딩 1층 실내 지도 (Ground Overlay)</title>
+    <meta name="viewport" content="initial-scale=1.0, user-scalable=no">
+    <meta charset="utf-8">
+    <style>
+        /* 지도를 담을 div의 크기를 설정합니다. */
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+        }
+        #map {
+            height: 100%;
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <script>
+        // 이 함수는 Google Maps API가 로드된 후 자동으로 실행됩니다.
+        function initMap() {
+            // 1. 지도의 중심 좌표를 설정합니다. (광화문 교보빌딩 근처)
+            const kyoboCenter = { lat: 37.5702, lng: 126.9744 };
+
+            // 2. 지도를 생성합니다.
+            const map = new google.maps.Map(document.getElementById('map'), {
+                zoom: 18, // 줌 레벨을 실내 지도가 잘 보이도록 높게 설정
+                center: kyoboCenter,
+                mapTypeId: 'satellite' // 건물이 잘 보이도록 위성 지도로 설정 (선택 사항)
+            });
+
+            // 3. Ground Overlay에 사용할 이미지 파일 경로를 설정합니다. (HTML 파일과 같은 경로)
+            const image_url = '1F.jpg'; 
+
+            // 4. Ground Overlay를 지도상에 배치할 경계를 설정합니다. (좌표는 추정치이며, 정확한 위치를 위해 조정이 필요합니다.)
+            // 남쪽 위도 (South), 북쪽 위도 (North), 서쪽 경도 (West), 동쪽 경도 (East) 순서
+            const imageBounds = {
+                north: 37.57055,  // 북동쪽 모서리 위도 (대략적인 추정치)
+                south: 37.56980,  // 남서쪽 모서리 위도 (대략적인 추정치)
+                east: 126.97520,  // 북동쪽 모서리 경도 (대략적인 추정치)
+                west: 126.97410   // 남서쪽 모서리 경도 (대략적인 추정치)
+            };
+
+            // 5. Ground Overlay 객체를 생성하고 지도에 추가합니다.
+            const historicalOverlay = new google.maps.GroundOverlay(
+                image_url,
+                imageBounds,
+                {
+                    opacity: 0.8 // 오버레이 투명도 설정 (지도와 겹쳐 보이도록)
+                }
+            );
+            historicalOverlay.setMap(map);
+
+            // 사용자가 오버레이 경계를 조정할 수 있도록 사각형을 추가합니다. (선택 사항)
+            const rectangle = new google.maps.Rectangle({
+                strokeColor: '#FF0000',
+                strokeOpacity: 0.8,
+                strokeWeight: 2,
+                fillColor: '#FF0000',
+                fillOpacity: 0.1,
+                bounds: imageBounds,
+                editable: true, // 사용자가 경계를 드래그하여 조정할 수 있게 합니다.
+                map: map
+            });
+
+            // 경계가 변경될 때마다 콘솔에 새 좌표를 출력합니다. (좌표 조정에 도움)
+            google.maps.event.addListener(rectangle, 'bounds_changed', function() {
+                const newBounds = rectangle.getBounds();
+                console.log("새로운 SouthWest 좌표:", newBounds.getSouthWest().toUrlValue());
+                console.log("새로운 NorthEast 좌표:", newBounds.getNorthEast().toUrlValue());
+            });
+        }
+    </script>
+    <script async defer
+        src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDg1TMFqbHw_Zxj-xVxldtWPmpNO-V4oF0&callback=initMap">
+    </script>
+</body>
+</html>
+
