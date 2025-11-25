@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>교보빌딩 1층 실내 지도 (이미지 디버깅 포함 v10.0)</title>
+    <title>교보빌딩 1층 실내 지도 (최종 수정본 v11.0)</title>
     <meta name="viewport" content="initial-scale=1.0, user-scalable=no">
     <meta charset="utf-8">
     <style>
@@ -78,23 +78,22 @@
                     this.div.style.opacity = '0.8';
 
                     const img = document.createElement('img');
-                    img.src = this.imageUrl; // '1F_2.png'
+                    img.src = this.imageUrl;
                     img.style.position = 'absolute';
                     img.style.pointerEvents = 'none';
-                    
-                    // ⭐ 이미지 로드 디버깅 로직 추가 ⭐
+
+                    // ⭐ 이미지 로드 디버깅 로직 (성공/실패 확인)
                     img.onload = () => {
                         console.log("✅ 이미지 로드 성공!");
-                        // 로드 성공 시 DIV에 연한 초록색 배경을 칠하여 위치와 크기를 시각화
                         this.div.style.backgroundColor = 'rgba(0, 255, 0, 0.1)';
+                        // draw()를 다시 호출하여 최종 크기를 올바르게 계산하도록 유도 (안전 장치)
+                        this.draw(); 
                     };
 
                     img.onerror = () => {
                         console.error("❌ 이미지 로드 실패! 파일 이름 및 경로를 확인하세요:", this.imageUrl);
-                        // 로드 실패 시 빨간색 배경을 칠하여 DIV의 위치와 크기만 시각화
                         this.div.style.backgroundColor = 'rgba(255, 0, 0, 0.3)';
                     };
-                    // ⭐ 디버깅 로직 끝 ⭐
 
                     this.div.appendChild(img);
                     const panes = this.getPanes();
@@ -121,19 +120,21 @@
                     let maxX = Math.max(p_nw.x, p_ne.x, p_se.x, p_sw.x);
                     let maxY = Math.max(p_nw.y, p_ne.y, p_se.y, p_sw.y);
 
-                    // DIV 위치와 크기 설정
+                    // DIV 위치와 크기 설정 (Bounding Box)
                     this.div.style.left = minX + 'px';
                     this.div.style.top = minY + 'px';
                     this.div.style.width = (maxX - minX) + 'px';
                     this.div.style.height = (maxY - minY) + 'px';
 
-                    // 이미지 변환 설정
+                    // ⭐ 수정된 부분: 이미지 크기를 DIV 컨테이너에 꽉 채우도록 설정
+                    imgElement.style.width = '100%'; 
+                    imgElement.style.height = '100%';
+                    
+                    // DIV 내에서 이미지를 NW 꼭짓점 위치로 옮겨 비틀림 위치를 맞춥니다.
                     const offsetX = p_nw.x - minX;
                     const offsetY = p_nw.y - minY;
                     
                     imgElement.style.transform = `translate3d(${offsetX}px, ${offsetY}px, 0)`;
-                    imgElement.style.width = (maxX - minX) + 'px';
-                    imgElement.style.height = (maxY - minY) + 'px';
                 }
 
                 onRemove() {
