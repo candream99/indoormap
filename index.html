@@ -1,11 +1,10 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>교보빌딩 1층 실내 지도 (Ground Overlay)</title>
+    <title>교보빌딩 1층 실내 지도 (동적 표시)</title>
     <meta name="viewport" content="initial-scale=1.0, user-scalable=no">
     <meta charset="utf-8">
     <style>
-        /* 지도를 담을 div의 크기를 설정합니다. */
         html, body {
             height: 100%;
             margin: 0;
@@ -19,77 +18,99 @@
 <body>
     <div id="map"></div>
     <script>
-        // 이 함수는 Google Maps API가 로드된 후 자동으로 실행됩니다.
         function initMap() {
-            // 사용자님이 제공해주신 네 모서리 좌표를 기반으로 남서쪽(SW)과 북동쪽(NE) 경계를 계산합니다.
-            
-            // 네 모서리 좌표 (위도, 경도)
-            // 위쪽 왼쪽 (NW): 37.571347, 126.977640
-            // 위쪽 오른쪽 (NE): 37.571352, 126.978030
-            // 아래쪽 왼쪽 (SW): 37.570529, 126.977658
-            // 아래쪽 오른쪽 (SE): 37.570533, 126.978045
-
-            // 1. Ground Overlay를 지도상에 배치할 최종 경계를 설정합니다.
+            // 1. 이미지 경계 좌표 설정 (이전 코드와 동일)
             const imageBounds = {
-                // North: 네 모서리 중 가장 큰 위도값 (위쪽 오른쪽/왼쪽 중 큰 값)
-                north: 37.571352,  
-                // South: 네 모서리 중 가장 작은 위도값 (아래쪽 오른쪽/왼쪽 중 작은 값)
-                south: 37.570529,  
-                // East: 네 모서리 중 가장 큰 경도값 (위쪽 오른쪽/아래쪽 오른쪽 중 큰 값)
-                east: 126.978045,  
-                // West: 네 모서리 중 가장 작은 경도값 (위쪽 왼쪽/아래쪽 왼쪽 중 작은 값)
-                west: 126.977640   
+                north: 37.571352,
+                south: 37.570529,
+                east: 126.978045,
+                west: 126.977640
             };
 
-            // 지도의 중심 좌표는 경계의 중앙으로 설정합니다.
-            const kyoboCenter = { 
-                lat: (imageBounds.north + imageBounds.south) / 2, 
-                lng: (imageBounds.east + imageBounds.west) / 2 
+            const kyoboCenter = {  
+                lat: (imageBounds.north + imageBounds.south) / 2,  
+                lng: (imageBounds.east + imageBounds.west) / 2  
             };
 
-            // 2. 지도를 생성합니다.
+            // 2. 지도 생성
             const map = new google.maps.Map(document.getElementById('map'), {
-                zoom: 18, // 줌 레벨을 실내 지도가 잘 보이도록 설정
+                zoom: 18,
                 center: kyoboCenter,
-                mapTypeId: 'roadmap' // 일반 지도 (요청하신 대로 유지)
+                mapTypeId: 'roadmap'
             });
 
-            // 3. Ground Overlay에 사용할 이미지 파일 경로를 설정합니다. (새 파일명 적용)
-            const image_url = '1F_2.jpg'; 
-
-            // 4. Ground Overlay 객체를 생성하고 지도에 추가합니다.
+            // 3. Ground Overlay 객체 생성 (초기에는 지도에 표시하지 않음)
+            const image_url = '1F_2.jpg';
             const historicalOverlay = new google.maps.GroundOverlay(
                 image_url,
                 imageBounds,
                 {
-                    opacity: 0.8 // 오버레이 투명도 설정 (지도와 겹쳐 보이도록)
+                    opacity: 0.8 // 이미지 투명도
                 }
             );
-            historicalOverlay.setMap(map);
 
-            // 5. 사용자가 오버레이 경계를 조정할 수 있도록 사각형을 추가합니다. (선택 사항)
-            // 정확한 좌표를 반영했으므로, 이제는 좌표 확인용 사각형은 주석 처리하거나 제거하셔도 됩니다.
+            // 이미지 표시 여부를 추적하는 변수
+            let isOverlayVisible = false;
+
+            // 4. 영역 표시 및 클릭 이벤트 처리를 위한 Rectangle 생성
             const rectangle = new google.maps.Rectangle({
+                // 초기 스타일: 테두리만 표시
                 strokeColor: '#FF0000',
-                strokeOpacity: 0.8,
+                strokeOpacity: 1.0,
                 strokeWeight: 2,
                 fillColor: '#FF0000',
-                fillOpacity: 0.1,
+                fillOpacity: 0.0, // 평소에는 투명 (0.0)
                 bounds: imageBounds,
-                editable: true, // 사용자가 경계를 드래그하여 조정할 수 있게 유지
+                editable: false, // 이제 조정용이 아니므로 편집 불가능하게 설정
                 map: map
             });
 
-            // 경계가 변경될 때마다 콘솔에 새 좌표를 출력합니다. (좌표 조정에 도움)
-            google.maps.event.addListener(rectangle, 'bounds_changed', function() {
-                const newBounds = rectangle.getBounds();
-                console.log("새로운 NorthEast 좌표:", newBounds.getNorthEast().toUrlValue());
-                console.log("새로운 SouthWest 좌표:", newBounds.getSouthWest().toUrlValue());
+            // 5. 이벤트 리스너 설정
+            
+            // A. 마우스를 올렸을 때 (mouseover) : 반투명하게 채우기
+            google.maps.event.addListener(rectangle, 'mouseover', function() {
+                if (!isOverlayVisible) {
+                    rectangle.setOptions({
+                        fillOpacity: 0.2 // 반투명 빨간색 (0.2)
+                    });
+                }
+            });
+
+            // B. 마우스가 벗어났을 때 (mouseout) : 채우기 제거
+            google.maps.event.addListener(rectangle, 'mouseout', function() {
+                if (!isOverlayVisible) {
+                    rectangle.setOptions({
+                        fillOpacity: 0.0 // 다시 투명하게
+                    });
+                }
+            });
+
+            // C. 영역을 클릭했을 때 (click) : 이미지 토글 (표시/숨김)
+            google.maps.event.addListener(rectangle, 'click', function() {
+                if (!isOverlayVisible) {
+                    // 이미지 표시
+                    historicalOverlay.setMap(map);
+                    // 사각형을 채우는 색상 제거 (이미지가 보이므로)
+                    rectangle.setOptions({
+                        fillOpacity: 0.0,
+                        strokeWeight: 4 // 클릭되었다는 것을 강조
+                    });
+                    isOverlayVisible = true;
+                } else {
+                    // 이미지 숨김
+                    historicalOverlay.setMap(null);
+                    // 사각형을 원래 상태로 복원
+                    rectangle.setOptions({
+                        fillOpacity: 0.0,
+                        strokeWeight: 2
+                    });
+                    isOverlayVisible = false;
+                }
             });
         }
     </script>
     <script async defer
         src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBFx8u1rY7G06Ho4y-nYPLQ4RKy4zsW_og&callback=initMap">
-    </script>
+        </script>
 </body>
 </html>
