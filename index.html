@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>교보빌딩 실내 지도 (층별 선택 기능 v1.0)</title>
+    <title>교보빌딩 실내 지도 (층별 선택 기능 v2.0)</title>
     <meta name="viewport" content="initial-scale=1.0, user-scalable=no">
     <meta charset="utf-8">
     <style>
@@ -18,12 +18,12 @@
             position: absolute;
             bottom: 20px;
             left: 20px;
-            z-index: 999; /* 지도 위에 표시되도록 높게 설정 */
+            z-index: 999;
             background-color: white;
             border-radius: 4px;
             padding: 5px;
             box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-            display: none; /* ⭐ 초기에는 숨김 ⭐ */
+            display: none;
         }
         .floor-button {
             display: block;
@@ -37,7 +37,7 @@
             font-weight: bold;
         }
         .floor-button.active {
-            background-color: #4285F4; /* Google Blue */
+            background-color: #4285F4;
             color: white;
             border-color: #4285F4;
         }
@@ -48,25 +48,22 @@
     <div id="floor-picker"></div>
 
     <script>
-        let isIndoorModeActive = false; // 실내 지도 모드 활성화 여부
-        let currentFloorId = '1F';      // 현재 표시 중인 층
-        let floorOverlays = {};         // 각 층의 GroundOverlay 객체를 저장
+        let isIndoorModeActive = false;
+        // ⭐ 초기 currentFloorId를 null로 변경하여 첫 switchFloor 호출을 강제합니다.
+        let currentFloorId = null;      
+        let floorOverlays = {};
 
-        // ⭐ 1. 층별 데이터 구조화 (이미지 파일명 및 경계) ⭐
         const FLOOR_DATA = {
-            // B2 (임의 좌표 및 이미지 파일명)
             "B2": {
                 imageUrl: 'B2_floorplan.png', 
                 imageBounds: { north: 37.571400, south: 37.570450, west: 126.977500, east: 126.978200 },
                 name: "B2"
             },
-            // B1 (임의 좌표 및 이미지 파일명)
             "B1": {
                 imageUrl: 'B1_floorplan.png', 
                 imageBounds: { north: 37.571385, south: 37.570480, west: 126.977550, east: 126.978180 },
                 name: "B1"
             },
-            // 1F (사용자 제공 최신 좌표 및 파일명)
             "1F": {
                 imageUrl: '1F_2.png',
                 imageBounds: { north: 37.571375, south: 37.570502, west: 126.977571, east: 126.978179 },
@@ -74,7 +71,6 @@
             }
         };
 
-        // 8개의 꼭짓점으로 이루어진 폴리곤 경로 (클릭/호버 영역)
         const BUILDING_PERIMETER = [
             { lat: 37.571348, lng: 126.977638 },
             { lat: 37.571352, lng: 126.978030 },
@@ -86,20 +82,17 @@
             { lat: 37.570531, lng: 126.977657 }
         ];
 
-        // 지도 라벨 숨김 스타일 정의
         const CLEAN_MAP_STYLE = [
             { featureType: "all", elementType: "labels", stylers: [{ visibility: "off" }] },
             { featureType: "all", elementType: "geometry", stylers: [{ saturation: -100 }] }
         ];
 
-        /**
-         * 지정된 층의 평면도 이미지를 지도에 표시하고 버튼 상태를 업데이트합니다.
-         * @param {string} newFloorId - 표시할 층 ID (예: '1F')
-         * @param {google.maps.Map} map - Google Map 객체
-         */
         function switchFloor(newFloorId, map) {
-            // 현재 활성화된 층이면 아무 작업도 하지 않음
-            if (currentFloorId === newFloorId) return;
+            // ⭐ 수정: currentFloorId가 null이면 실행을 강제합니다. (첫 진입 시)
+            if (currentFloorId === newFloorId) {
+                // 첫 진입이 아니면서 같은 층을 누르면 종료
+                if (currentFloorId !== null) return; 
+            }
 
             // 1. 이전 층 이미지 숨기기
             if (floorOverlays[currentFloorId]) {
@@ -111,39 +104,37 @@
 
             // 2. 새 층 이미지 표시
             if (!floorOverlays[newFloorId]) {
-                // GroundOverlay가 없으면 새로 생성 (GroundOverlay는 LatLngBounds 객체를 사용)
                 floorOverlays[newFloorId] = new google.maps.GroundOverlay(
                     floor.imageUrl, floor.imageBounds, { opacity: 0.8 }
                 );
             }
-            // 지도에 이미지 표시
             floorOverlays[newFloorId].setMap(map);
 
             // 3. 버튼 상태 업데이트
             document.querySelectorAll('.floor-button').forEach(btn => {
                 btn.classList.remove('active');
             });
-            document.getElementById(`btn-${newFloorId}`).classList.add('active');
+            // ⭐ 수정: 버튼이 DOM에 있는지 확인 후 활성화
+            const activeBtn = document.getElementById(`btn-${newFloorId}`);
+            if (activeBtn) {
+                activeBtn.classList.add('active');
+            }
         }
 
         function initMap() {
-            // 1F 경계를 기준으로 지도 중심 좌표 계산
             const initialBounds = FLOOR_DATA['1F'].imageBounds;
             const kyoboCenter = {  
                 lat: (initialBounds.north + initialBounds.south) / 2,
                 lng: (initialBounds.east + initialBounds.west) / 2
             };
 
-            // 1. 지도 생성
             const map = new google.maps.Map(document.getElementById('map'), {
                 zoom: 18, center: kyoboCenter, mapTypeId: 'roadmap' 
             });
 
-            // 2. 스타일 지도 유형 정의 및 추가
             const cleanMapType = new google.maps.StyledMapType(CLEAN_MAP_STYLE, { name: "Clean Map" });
             map.mapTypes.set('clean_map', cleanMapType);
             
-            // 3. 8개 꼭짓점 Polygon 생성
             const buildingPolygon = new google.maps.Polygon({
                 paths: BUILDING_PERIMETER,
                 strokeColor: '#FF0000', strokeOpacity: 1.0, strokeWeight: 2,
@@ -151,9 +142,7 @@
                 zIndex: 10, map: map
             });
 
-            // ⭐ 4. 층 선택 버튼 생성 및 이벤트 연결 ⭐
             const floorPicker = document.getElementById('floor-picker');
-            // 층을 역순으로 표시 (B2 -> B1 -> 1F 순으로 아래에서 위로)
             Object.keys(FLOOR_DATA).reverse().forEach(floorId => { 
                 const btn = document.createElement('button');
                 btn.textContent = FLOOR_DATA[floorId].name;
@@ -163,7 +152,7 @@
                 floorPicker.appendChild(btn);
             });
 
-            // 5. 마우스 오버/아웃 이벤트
+            // 마우스 오버/아웃 이벤트
             google.maps.event.addListener(buildingPolygon, 'mouseover', function() {
                 if (!isIndoorModeActive) { buildingPolygon.setOptions({ fillOpacity: 0.2 }); }
             });
@@ -171,39 +160,35 @@
                 if (!isIndoorModeActive) { buildingPolygon.setOptions({ fillOpacity: 0.0 }); }
             });
 
-            // ⭐ 6. 클릭 이벤트 (실내 모드 토글) ⭐
+            // 클릭 이벤트 (실내 모드 토글)
             google.maps.event.addListener(buildingPolygon, 'click', function() {
                 if (!isIndoorModeActive) {
                     // 실내 모드 진입
                     isIndoorModeActive = true;
                     
-                    // a. 지도 스타일 변경 (라벨 숨김)
+                    // ⭐ 수정: currentFloorId를 강제로 null로 초기화하여 switchFloor('1F')를 실행하도록 보장
+                    currentFloorId = null; 
+                    
                     map.setMapTypeId('clean_map'); 
-
-                    // b. 층 선택기 표시
                     floorPicker.style.display = 'block';
                     
-                    // c. 1F 평면도 표시 및 버튼 활성화
-                    switchFloor('1F', map);
+                    // 1F 평면도 표시 및 버튼 활성화 (이제 이 호출은 이미지 로드를 확실하게 실행합니다.)
+                    switchFloor('1F', map); 
                     
-                    // d. 폴리곤 스타일 변경
                     buildingPolygon.setOptions({ fillOpacity: 0.0, strokeWeight: 4 });
                 } else {
                     // 실내 모드 종료
                     isIndoorModeActive = false;
 
-                    // a. 모든 층 이미지 숨김
+                    // 현재 활성화된 이미지 숨김
                     if (floorOverlays[currentFloorId]) {
                         floorOverlays[currentFloorId].setMap(null);
                     }
+                    // ⭐ 수정: currentFloorId를 다시 '1F'로 설정하여 다음 진입을 준비
+                    currentFloorId = '1F'; 
                     
-                    // b. 층 선택기 숨김
                     floorPicker.style.display = 'none';
-
-                    // c. 지도 유형을 원래의 'roadmap'으로 복원
                     map.setMapTypeId('roadmap');
-
-                    // d. 폴리곤 스타일 복원
                     buildingPolygon.setOptions({ strokeWeight: 2, fillOpacity: 0.0 });
                 }
             });
