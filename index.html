@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>교보빌딩 1층 실내 지도 (라벨 숨김 기능 v4.0)</title>
+    <title>교보빌딩 1층 실내 지도 (모든 라벨 숨김 v5.0)</title>
     <meta name="viewport" content="initial-scale=1.0, user-scalable=no">
     <meta charset="utf-8">
     <style>
@@ -21,19 +21,14 @@
         let historicalOverlay = null; 
         let isOverlayVisible = false;
 
-        // 1. 라벨을 숨기는 스타일 정의 (숨기고자 하는 요소를 추가/제거할 수 있습니다.)
-        const HIDE_LABELS_STYLE = [
-            {
-                featureType: "poi",
-                elementType: "labels",
-                stylers: [{ visibility: "off" }]
-            },
-            {
-                featureType: "road",
-                elementType: "labels",
-                stylers: [{ visibility: "off" }]
-            }
-            // 필요한 경우 'administrative', 'transit' 등 다른 요소도 숨길 수 있습니다.
+        // 1. 지도상의 거의 모든 라벨을 숨기도록 확장된 스타일 정의
+        const HIDE_ALL_LABELS_STYLE = [
+            { featureType: "poi", elementType: "labels", stylers: [{ visibility: "off" }] },
+            { featureType: "road", elementType: "labels", stylers: [{ visibility: "off" }] },
+            { featureType: "transit", elementType: "labels", stylers: [{ visibility: "off" }] },
+            { featureType: "administrative", elementType: "labels", stylers: [{ visibility: "off" }] },
+            { featureType: "water", elementType: "labels", stylers: [{ visibility: "off" }] },
+            { featureType: "landscape", elementType: "labels", stylers: [{ visibility: "off" }] }
         ];
 
         function initMap() {
@@ -47,24 +42,21 @@
                 lng: (imageBounds.east + imageBounds.west) / 2  
             };
 
-            // 2. 지도 생성
+            // 2. 지도 생성 (⭐mapTypeId를 'hybrid'로 변경하여 라벨 노출 문제를 줄임)
             const map = new google.maps.Map(document.getElementById('map'), {
                 zoom: 18,
                 center: kyoboCenter,
-                mapTypeId: 'roadmap'
-                // ⭐ 초기에는 스타일을 적용하지 않음
+                mapTypeId: 'hybrid' 
             });
 
-            // 3. 영역 표시 및 이벤트 처리를 위한 Rectangle 생성 (이전과 동일)
+            // 3. Rectangle 생성 (이전과 동일)
             const rectangle = new google.maps.Rectangle({
                 strokeColor: '#FF0000', strokeOpacity: 1.0, strokeWeight: 2,
                 fillColor: '#FF0000', fillOpacity: 0.0, 
                 bounds: imageBounds, editable: false, zIndex: 10, map: map
             });
 
-            // 4. 이벤트 리스너 설정
-            
-            // 마우스 오버/아웃 이벤트 (이전과 동일)
+            // 4. 이벤트 리스너 설정 (mouseover/mouseout은 동일)
             google.maps.event.addListener(rectangle, 'mouseover', function() {
                 if (!isOverlayVisible) { rectangle.setOptions({ fillOpacity: 0.2 }); }
             });
@@ -72,10 +64,10 @@
                 if (!isOverlayVisible) { rectangle.setOptions({ fillOpacity: 0.0 }); }
             });
 
-            // C. 영역을 클릭했을 때 (click) : 이미지 토글 및 스타일 변경 (⭐수정 포인트)
+            // C. 영역을 클릭했을 때 (click) : 이미지 토글 및 스타일 변경
             google.maps.event.addListener(rectangle, 'click', function() {
                 if (!isOverlayVisible) {
-                    // 1. Ground Overlay 생성/표시 (이전과 동일)
+                    // 1. Ground Overlay 생성/표시
                     if (historicalOverlay === null) {
                         historicalOverlay = new google.maps.GroundOverlay(
                             '1F_2.jpg', imageBounds, { opacity: 0.8 }
@@ -84,17 +76,17 @@
                     historicalOverlay.setMap(map);
                     isOverlayVisible = true;
                     
-                    // 2. 라벨 숨김 스타일 적용 ⭐
-                    map.setOptions({ styles: HIDE_LABELS_STYLE });
+                    // 2. 확장된 라벨 숨김 스타일 적용 ⭐
+                    map.setOptions({ styles: HIDE_ALL_LABELS_STYLE });
 
                     // 3. 사각형 스타일 변경
                     rectangle.setOptions({ fillOpacity: 0.0, strokeWeight: 4 });
                 } else {
-                    // 1. 이미지 숨김 (이전과 동일)
+                    // 1. 이미지 숨김
                     historicalOverlay.setMap(null);
                     isOverlayVisible = false;
 
-                    // 2. 원래 지도 스타일 복원 (styles: null로 설정하여 제거) ⭐
+                    // 2. 원래 지도 스타일 복원 (styles: null로 설정하여 제거)
                     map.setOptions({ styles: null });
 
                     // 3. 사각형 스타일 복원
