@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>교보빌딩 1층 실내 지도 (최종 수정본 v11.0)</title>
+    <title>교보빌딩 1층 실내 지도 (최종 수정본 v11.1)</title>
     <meta name="viewport" content="initial-scale=1.0, user-scalable=no">
     <meta charset="utf-8">
     <style>
@@ -24,13 +24,11 @@
         let customOverlay = null; 
         let isOverlayVisible = false;
 
-        // 지도 라벨 숨김 스타일
         const CLEAN_MAP_STYLE = [
             { featureType: "all", elementType: "labels", stylers: [{ visibility: "off" }] },
             { featureType: "all", elementType: "geometry", stylers: [{ saturation: -100 }] }
         ];
 
-        // 8개 꼭짓점 Polygon 데이터 (클릭/호버 영역)
         const BUILDING_PERIMETER = [
             { lat: 37.571348, lng: 126.977638 },
             { lat: 37.571352, lng: 126.978030 },
@@ -42,15 +40,13 @@
             { lat: 37.570531, lng: 126.977657 }
         ];
 
-        // 4개 꼭짓점 이미지 경계 데이터 (Image Overlay 배치용)
         const IMAGE_CORNERS = [
-            { lat: 37.571348, lng: 126.977638 }, // NW
-            { lat: 37.571353, lng: 126.978152 }, // NE
-            { lat: 37.570542, lng: 126.978171 }, // SE
-            { lat: 37.570527, lng: 126.977660 }  // SW
+            { lat: 37.571348, lng: 126.977638 }, 
+            { lat: 37.571353, lng: 126.978152 },
+            { lat: 37.570542, lng: 126.978171 },
+            { lat: 37.570527, lng: 126.977660 }
         ];
-        
-        // 4개 꼭짓점 기반 전체 경계
+
         const IMAGE_BOUNDS = {
             north: 37.571353, south: 37.570527,
             east: 126.978171, west: 126.977638
@@ -58,10 +54,13 @@
 
 
         // =================================================================
-        // 2. initMap 함수: API 로드 후 호출되는 메인 함수
+        // 2. initMap 실행
         // =================================================================
         function initMap() {
-            // A. CustomImageOverlay 클래스를 initMap 내부로 이동
+
+            // =======================
+            // Custom Overlay 클래스
+            // =======================
             class CustomImageOverlay extends google.maps.OverlayView {
                 constructor(map, imageUrl, cornerCoords) {
                     super();
@@ -69,72 +68,61 @@
                     this.imageUrl = imageUrl;
                     this.cornerCoords = cornerCoords;
                     this.div = null;
+
+                    // ⭐ 생성 시점에 map을 바로 setMap 함
+                    this.setMap(map);
                 }
 
                 onAdd() {
                     this.div = document.createElement('div');
                     this.div.style.position = 'absolute';
                     this.div.style.overflow = 'hidden';
-                    this.div.style.opacity = '0.8';
+                    this.div.style.opacity = '0.85';
+                    this.div.style.visibility = 'visible';   // ⭐ hidden 제거
 
                     const img = document.createElement('img');
                     img.src = this.imageUrl;
                     img.style.position = 'absolute';
                     img.style.pointerEvents = 'none';
 
-                    // ⭐ 이미지 로드 디버깅 로직 (성공/실패 확인)
-                    img.onload = () => {
-                        console.log("✅ 이미지 로드 성공!");
-                        this.div.style.backgroundColor = 'rgba(0, 255, 0, 0.1)';
-                        // draw()를 다시 호출하여 최종 크기를 올바르게 계산하도록 유도 (안전 장치)
-                        this.draw(); 
-                    };
-
-                    img.onerror = () => {
-                        console.error("❌ 이미지 로드 실패! 파일 이름 및 경로를 확인하세요:", this.imageUrl);
-                        this.div.style.backgroundColor = 'rgba(255, 0, 0, 0.3)';
-                    };
+                    img.onload = () => console.log("이미지 로드 성공");
+                    img.onerror = () => console.error("이미지 로드 실패:", this.imageUrl);
 
                     this.div.appendChild(img);
-                    const panes = this.getPanes();
-                    panes.overlayLayer.appendChild(this.div);
-                    
-                    this.div.style.visibility = 'hidden';
+                    this.getPanes().overlayLayer.appendChild(this.div);
                 }
 
                 draw() {
                     if (!this.div) return;
+
                     const projection = this.getProjection();
                     if (!projection) return;
 
-                    const imgElement = this.div.querySelector('img');
-                    if (!imgElement) return;
+                    const imgEl = this.div.querySelector('img');
+                    if (!imgEl) return;
 
-                    // 4개 꼭짓점의 위도/경도를 픽셀 좌표로 변환
-                    const pixels = this.cornerCoords.map(latLng => projection.fromLatLngToDivPixel(new google.maps.LatLng(latLng.lat, latLng.lng)));
+                    const pixels = this.cornerCoords.map(c =>
+                        projection.fromLatLngToDivPixel(new google.maps.LatLng(c.lat, c.lng))
+                    );
+
                     const p_nw = pixels[0], p_ne = pixels[1], p_se = pixels[2], p_sw = pixels[3];
 
-                    // 이미지 DIV의 Bounding Box 계산
-                    let minX = Math.min(p_nw.x, p_ne.x, p_se.x, p_sw.x);
-                    let minY = Math.min(p_nw.y, p_ne.y, p_se.y, p_sw.y);
-                    let maxX = Math.max(p_nw.x, p_ne.x, p_se.x, p_sw.x);
-                    let maxY = Math.max(p_nw.y, p_ne.y, p_se.y, p_sw.y);
+                    const minX = Math.min(p_nw.x, p_ne.x, p_se.x, p_sw.x);
+                    const minY = Math.min(p_nw.y, p_ne.y, p_se.y, p_sw.y);
+                    const maxX = Math.max(p_nw.x, p_ne.x, p_se.x, p_sw.x);
+                    const maxY = Math.max(p_nw.y, p_ne.y, p_se.y, p_sw.y);
 
-                    // DIV 위치와 크기 설정 (Bounding Box)
                     this.div.style.left = minX + 'px';
                     this.div.style.top = minY + 'px';
                     this.div.style.width = (maxX - minX) + 'px';
                     this.div.style.height = (maxY - minY) + 'px';
 
-                    // ⭐ 수정된 부분: 이미지 크기를 DIV 컨테이너에 꽉 채우도록 설정
-                    imgElement.style.width = '100%'; 
-                    imgElement.style.height = '100%';
-                    
-                    // DIV 내에서 이미지를 NW 꼭짓점 위치로 옮겨 비틀림 위치를 맞춥니다.
+                    imgEl.style.width = '100%';
+                    imgEl.style.height = '100%';
+
                     const offsetX = p_nw.x - minX;
                     const offsetY = p_nw.y - minY;
-                    
-                    imgElement.style.transform = `translate3d(${offsetX}px, ${offsetY}px, 0)`;
+                    imgEl.style.transform = `translate3d(${offsetX}px, ${offsetY}px, 0)`;
                 }
 
                 onRemove() {
@@ -144,63 +132,70 @@
                     }
                 }
 
-                hide() {
-                    if (this.div) this.div.style.visibility = 'hidden';
-                }
                 show() {
                     if (this.div) this.div.style.visibility = 'visible';
                 }
-            } // CustomImageOverlay 클래스 정의 끝
+                hide() {
+                    if (this.div) this.div.style.visibility = 'hidden';
+                }
+            }
 
-            // 지도 중심 좌표 설정
-            const kyoboCenter = {  
-                lat: (IMAGE_BOUNDS.north + IMAGE_BOUNDS.south) / 2,  
-                lng: (IMAGE_BOUNDS.east + IMAGE_BOUNDS.west) / 2  
+
+            // =======================
+            // 지도 초기화
+            // =======================
+            const kyoboCenter = {
+                lat: (IMAGE_BOUNDS.north + IMAGE_BOUNDS.south) / 2,
+                lng: (IMAGE_BOUNDS.east + IMAGE_BOUNDS.west) / 2
             };
 
-            // 지도 생성
             const map = new google.maps.Map(document.getElementById('map'), {
-                zoom: 18, center: kyoboCenter, mapTypeId: 'roadmap' 
+                zoom: 18,
+                center: kyoboCenter,
+                mapTypeId: 'roadmap'
             });
 
-            // 스타일 지도 설정
             const cleanMapType = new google.maps.StyledMapType(CLEAN_MAP_STYLE, { name: "Clean Map" });
             map.mapTypes.set('clean_map', cleanMapType);
-            
-            // Polygon 생성 (8개 꼭짓점 외곽선)
+
             const buildingPolygon = new google.maps.Polygon({
-                paths: BUILDING_PERIMETER, 
-                strokeColor: '#FF0000', strokeOpacity: 1.0, strokeWeight: 2,
-                fillColor: '#FF0000', fillOpacity: 0.0, 
-                zIndex: 10, map: map
+                paths: BUILDING_PERIMETER,
+                strokeColor: '#FF0000',
+                strokeOpacity: 1.0,
+                strokeWeight: 2,
+                fillColor: '#FF0000',
+                fillOpacity: 0.0,
+                zIndex: 10,
+                map: map
             });
 
-            // CustomImageOverlay 객체 생성
-            customOverlay = new CustomImageOverlay(null, '1F_2.png', IMAGE_CORNERS);
+            // ⭐ map을 넣어서 Overlay 생성 (가장 중요!!)
+            customOverlay = new CustomImageOverlay(
+                map,
+                '1F_2.png',
+                IMAGE_CORNERS
+            );
 
-            // 이벤트 리스너 설정
-            
-            // 마우스 오버/아웃 이벤트
-            google.maps.event.addListener(buildingPolygon, 'mouseover', function() {
-                if (!isOverlayVisible) { buildingPolygon.setOptions({ fillOpacity: 0.2 }); }
-            });
-            google.maps.event.addListener(buildingPolygon, 'mouseout', function() {
-                if (!isOverlayVisible) { buildingPolygon.setOptions({ fillOpacity: 0.0 }); }
+
+            // =======================
+            // 이벤트
+            // =======================
+            google.maps.event.addListener(buildingPolygon, 'mouseover', function () {
+                if (!isOverlayVisible) buildingPolygon.setOptions({ fillOpacity: 0.2 });
             });
 
-            // 클릭 이벤트 (이미지 토글 및 스타일 변경)
-            google.maps.event.addListener(buildingPolygon, 'click', function() {
+            google.maps.event.addListener(buildingPolygon, 'mouseout', function () {
+                if (!isOverlayVisible) buildingPolygon.setOptions({ fillOpacity: 0.0 });
+            });
+
+            google.maps.event.addListener(buildingPolygon, 'click', function () {
                 if (!isOverlayVisible) {
-                    // 이미지 표시 및 지도 스타일 변경
-                    customOverlay.setMap(map); 
                     customOverlay.show();
                     isOverlayVisible = true;
-                    map.setMapTypeId('clean_map'); 
+                    map.setMapTypeId('clean_map');
                     buildingPolygon.setOptions({ fillOpacity: 0.0, strokeWeight: 4 });
                 } else {
-                    // 이미지 숨김 및 지도 스타일 복원
                     customOverlay.hide();
-                    customOverlay.setMap(null); 
                     isOverlayVisible = false;
                     map.setMapTypeId('roadmap');
                     buildingPolygon.setOptions({ strokeWeight: 2, fillOpacity: 0.0 });
@@ -208,8 +203,9 @@
             });
         }
     </script>
+
     <script async defer
         src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBFx8u1rY7G06Ho4y-nYPLQ4RKy4zsW_og&callback=initMap">
-        </script>
+    </script>
 </body>
 </html>
