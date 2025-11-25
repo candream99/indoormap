@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>교보빌딩 1층 실내 지도 (동적 표시)</title>
+    <title>교보빌딩 1층 실내 지도 (동적 표시 v2.0)</title>
     <meta name="viewport" content="initial-scale=1.0, user-scalable=no">
     <meta charset="utf-8">
     <style>
@@ -19,7 +19,7 @@
     <div id="map"></div>
     <script>
         function initMap() {
-            // 1. 이미지 경계 좌표 설정 (이전 코드와 동일)
+            // 1. 이미지 경계 좌표 설정
             const imageBounds = {
                 north: 37.571352,
                 south: 37.570529,
@@ -39,7 +39,7 @@
                 mapTypeId: 'roadmap'
             });
 
-            // 3. Ground Overlay 객체 생성 (초기에는 지도에 표시하지 않음)
+            // 3. Ground Overlay 객체 생성 및 초기 숨김 처리 (⭐수정 포인트)
             const image_url = '1F_2.jpg';
             const historicalOverlay = new google.maps.GroundOverlay(
                 image_url,
@@ -48,20 +48,23 @@
                     opacity: 0.8 // 이미지 투명도
                 }
             );
+            // Ground Overlay를 지도에서 명시적으로 숨김 상태로 시작
+            historicalOverlay.setMap(null); 
 
             // 이미지 표시 여부를 추적하는 변수
             let isOverlayVisible = false;
 
-            // 4. 영역 표시 및 클릭 이벤트 처리를 위한 Rectangle 생성
+            // 4. 영역 표시 및 이벤트 처리를 위한 Rectangle 생성
             const rectangle = new google.maps.Rectangle({
                 // 초기 스타일: 테두리만 표시
                 strokeColor: '#FF0000',
                 strokeOpacity: 1.0,
                 strokeWeight: 2,
                 fillColor: '#FF0000',
-                fillOpacity: 0.0, // 평소에는 투명 (0.0)
+                fillOpacity: 0.0, // 평소에는 채우기 투명 (0.0)
                 bounds: imageBounds,
-                editable: false, // 이제 조정용이 아니므로 편집 불가능하게 설정
+                editable: false, 
+                zIndex: 10, // ⭐수정 포인트: Z-Index를 높여 이벤트 처리를 확실하게 함
                 map: map
             });
 
@@ -90,21 +93,26 @@
                 if (!isOverlayVisible) {
                     // 이미지 표시
                     historicalOverlay.setMap(map);
-                    // 사각형을 채우는 색상 제거 (이미지가 보이므로)
+                    isOverlayVisible = true;
+                    
+                    // 클릭된 상태로 스타일 변경: 채우기 투명, 테두리 두껍게
                     rectangle.setOptions({
                         fillOpacity: 0.0,
-                        strokeWeight: 4 // 클릭되었다는 것을 강조
+                        strokeWeight: 4 
                     });
-                    isOverlayVisible = true;
                 } else {
                     // 이미지 숨김
                     historicalOverlay.setMap(null);
-                    // 사각형을 원래 상태로 복원
-                    rectangle.setOptions({
-                        fillOpacity: 0.0,
-                        strokeWeight: 2
-                    });
                     isOverlayVisible = false;
+
+                    // 사각형 스타일 복원: 테두리 원래대로
+                    rectangle.setOptions({
+                        strokeWeight: 2,
+                        fillOpacity: 0.0
+                    });
+                    
+                    // 마우스가 사각형 위에 있었다면, 마우스 아웃 이벤트가 발생하지 않았으므로
+                    // 명시적으로 투명도를 0.0으로 설정하여 오버된 색상이 남지 않도록 보장합니다.
                 }
             });
         }
