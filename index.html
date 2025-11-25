@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>교보빌딩 1층 실내 지도 (동적 표시 v2.0)</title>
+    <title>교보빌딩 1층 실내 지도 (클릭 시 생성 v3.0)</title>
     <meta name="viewport" content="initial-scale=1.0, user-scalable=no">
     <meta charset="utf-8">
     <style>
@@ -18,6 +18,10 @@
 <body>
     <div id="map"></div>
     <script>
+        // 전역 변수로 선언하여 initMap 함수 외부에서도 접근 가능하게 합니다.
+        let historicalOverlay = null; // Ground Overlay 객체를 저장할 변수
+        let isOverlayVisible = false; // 이미지 표시 여부 추적 변수
+
         function initMap() {
             // 1. 이미지 경계 좌표 설정
             const imageBounds = {
@@ -39,63 +43,53 @@
                 mapTypeId: 'roadmap'
             });
 
-            // 3. Ground Overlay 객체 생성 및 초기 숨김 처리 (⭐수정 포인트)
-            const image_url = '1F_2.jpg';
-            const historicalOverlay = new google.maps.GroundOverlay(
-                image_url,
-                imageBounds,
-                {
-                    opacity: 0.8 // 이미지 투명도
-                }
-            );
-            // Ground Overlay를 지도에서 명시적으로 숨김 상태로 시작
-            historicalOverlay.setMap(null); 
-
-            // 이미지 표시 여부를 추적하는 변수
-            let isOverlayVisible = false;
-
-            // 4. 영역 표시 및 이벤트 처리를 위한 Rectangle 생성
+            // 3. 영역 표시 및 이벤트 처리를 위한 Rectangle 생성 (초기 상태: 테두리만)
             const rectangle = new google.maps.Rectangle({
-                // 초기 스타일: 테두리만 표시
                 strokeColor: '#FF0000',
                 strokeOpacity: 1.0,
                 strokeWeight: 2,
                 fillColor: '#FF0000',
-                fillOpacity: 0.0, // 평소에는 채우기 투명 (0.0)
+                fillOpacity: 0.0, // 평소에는 채우기 투명
                 bounds: imageBounds,
                 editable: false, 
-                zIndex: 10, // ⭐수정 포인트: Z-Index를 높여 이벤트 처리를 확실하게 함
+                zIndex: 10,
                 map: map
             });
 
-            // 5. 이벤트 리스너 설정
+            // 4. 이벤트 리스너 설정
             
             // A. 마우스를 올렸을 때 (mouseover) : 반투명하게 채우기
             google.maps.event.addListener(rectangle, 'mouseover', function() {
                 if (!isOverlayVisible) {
-                    rectangle.setOptions({
-                        fillOpacity: 0.2 // 반투명 빨간색 (0.2)
-                    });
+                    rectangle.setOptions({ fillOpacity: 0.2 });
                 }
             });
 
             // B. 마우스가 벗어났을 때 (mouseout) : 채우기 제거
             google.maps.event.addListener(rectangle, 'mouseout', function() {
                 if (!isOverlayVisible) {
-                    rectangle.setOptions({
-                        fillOpacity: 0.0 // 다시 투명하게
-                    });
+                    rectangle.setOptions({ fillOpacity: 0.0 });
                 }
             });
 
-            // C. 영역을 클릭했을 때 (click) : 이미지 토글 (표시/숨김)
+            // C. 영역을 클릭했을 때 (click) : 이미지 토글 (생성/표시 또는 숨김)
             google.maps.event.addListener(rectangle, 'click', function() {
                 if (!isOverlayVisible) {
+                    // Ground Overlay가 아직 생성되지 않았다면 생성
+                    if (historicalOverlay === null) {
+                        const image_url = '1F_2.jpg';
+                        historicalOverlay = new google.maps.GroundOverlay(
+                            image_url,
+                            imageBounds,
+                            { opacity: 0.8 }
+                        );
+                    }
+
                     // 이미지 표시
                     historicalOverlay.setMap(map);
                     isOverlayVisible = true;
                     
-                    // 클릭된 상태로 스타일 변경: 채우기 투명, 테두리 두껍게
+                    // 사각형 스타일 변경 (클릭됨 강조)
                     rectangle.setOptions({
                         fillOpacity: 0.0,
                         strokeWeight: 4 
@@ -105,14 +99,11 @@
                     historicalOverlay.setMap(null);
                     isOverlayVisible = false;
 
-                    // 사각형 스타일 복원: 테두리 원래대로
+                    // 사각형 스타일 복원
                     rectangle.setOptions({
                         strokeWeight: 2,
-                        fillOpacity: 0.0
+                        fillOpacity: 0.0 // 마우스가 위에 있어도 투명하게 시작
                     });
-                    
-                    // 마우스가 사각형 위에 있었다면, 마우스 아웃 이벤트가 발생하지 않았으므로
-                    // 명시적으로 투명도를 0.0으로 설정하여 오버된 색상이 남지 않도록 보장합니다.
                 }
             });
         }
