@@ -165,14 +165,9 @@
 
         // === 지도 스타일 및 데이터 정의 ===
         const CLEAN_MAP_STYLE = [
-    { featureType: "all", elementType: "labels", stylers: [{ visibility: "off" }] },
-    { featureType: "all", elementType: "geometry", stylers: [{ saturation: -100 }] },
-    
-    // ⭐ 핵심 수정: 3D 건물을 완전히 숨깁니다. ⭐
-    { featureType: "building", elementType: "geometry", stylers: [{ visibility: "off" }] },
-    // 지도를 더욱 깨끗하게 유지하기 위해 POI(장소 아이콘)도 숨깁니다. (선택 사항)
-    { featureType: "poi", elementType: "all", stylers: [{ visibility: "off" }] }
-];
+            { featureType: "all", elementType: "labels", stylers: [{ visibility: "off" }] },
+            { featureType: "all", elementType: "geometry", stylers: [{ saturation: -100 }] }
+        ];
 
         const BUILDING_CONFIGS = {
             'KYOBOCENTER': {
@@ -186,7 +181,7 @@
                 ],
                 accessibility: { ramp: true, disabledToilet: true, braille: true, elevator: true, stepFree: false },
                 floors: {
-                    "1F": { imageUrl: 'https://raw.githubusercontent.com/candream99/indoormap/main/kb/ky__.png', imageBounds: { north: 37.571420, south: 37.570473, west: 126.977532, east: 126.978215 }, 
+                    "1F": { imageUrl: 'https://raw.githubusercontent.com/candream99/indoormap/main/kb/ky_1.jpg', imageBounds: { north: 37.571420, south: 37.570473, west: 126.977532, east: 126.978215 }, 
             name: "1F" },
                     "B1": { imageUrl: 'B1_floorplan.png', imageBounds: { north: 37.571385, south: 37.570480, west: 126.977550, east: 126.978180 }, name: "B1" },
                     "B2": { imageUrl: 'B2_floorplan.png', imageBounds: { north: 37.571400, south: 37.570450, west: 126.977500, east: 126.978200 }, name: "B2" }
@@ -204,12 +199,12 @@
                 accessibility: { ramp: false, disabledToilet: true, braille: true, elevator: true, stepFree: true }, 
                 floors: {
                     "1F": { 
-                        imageUrl: 'https://raw.githubusercontent.com/candream99/indoormap/main/D_tower/dt_11.png', 
+                        imageUrl: 'https://raw.githubusercontent.com/candream99/indoormap/main/D_tower/d_t5.jpg', 
                         imageBounds: { north: 37.571663, south: 37.570344, west: 126.978586, east: 126.979213 },
                         name: "1F"
                     },
                     "B4": {
-                        imageUrl: 'https://raw.githubusercontent.com/candream99/indoormap/main/D_tower/dt_2.png', 
+                        imageUrl: 'https://raw.githubusercontent.com/candream99/indoormap/main/D_tower/d_t6.jpg', 
                         imageBounds: { north: 37.571663, south: 37.570344, west: 126.978586, east: 126.979213 },
                         name: "B4"
                     }
@@ -282,7 +277,7 @@
                 return order[b] - order[a]; 
             }).reverse();
 
-            const initialFloorId = '1F';
+            const initialFloorId = floorKeys[0];
             
             floorKeys.forEach(floorId => { 
                 const btn = document.createElement('button');
@@ -382,7 +377,7 @@
             const kyoboCenter = BUILDING_CONFIGS['KYOBOCENTER'].center;
 
             const map = new google.maps.Map(document.getElementById('map'), {
-                zoom: 17, center: kyoboCenter, mapTypeId: 'roadmap', tilt: 0 
+                zoom: 17, center: kyoboCenter, mapTypeId: 'roadmap' 
             });
             mapInstance = map;
 
@@ -457,7 +452,7 @@
                         setupFloorPicker(clickedId, map);
                         updateAccessibilityInfo(config.accessibility); 
 
-                        this.setOptions({ fillOpacity: 0.0, strokeWeight: 0 });
+                        this.setOptions({ fillOpacity: 0.0, strokeWeight: 4 });
 
                     } else if (activeBuildingId === clickedId) {
                         // 실내 모드 종료 (현재 활성 건물을 다시 클릭)
@@ -498,14 +493,3 @@
         </script>
 </body>
 </html>
-
-
-
-
-
-
-
-
-
-
-
