@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>다중 건물 실내 지도 (최종 통합본 - 폴리곤 제어 적용, 2D 고정)</title>
+    <title>다중 건물 실내 지도 (최종 통합본 - 폴리곤 제어 적용)</title>
     <meta name="viewport" content="initial-scale=1.0, user-scalable=no, width=device-width">
     <meta charset="utf-8">
     
@@ -165,19 +165,14 @@
 
         // === 지도 스타일 및 데이터 정의 ===
         const CLEAN_MAP_STYLE = [
-            { featureType: "all", elementType: "labels", stylers: [{ visibility: "off" }] },
-            { featureType: "all", elementType: "geometry", stylers: [{ saturation: -100 }] },
-            
-            // 3D 건물을 완전히 숨깁니다.
-            { featureType: "building", elementType: "geometry", stylers: [{ visibility: "off" }] },
-            // 인공 구조물(도로변 건물 등)도 숨김
-            { featureType: "landscape.man_made", stylers: [{ visibility: "off" }] },
-            // POI(장소) 숨김
-            { featureType: "poi", elementType: "all", stylers: [{ visibility: "off" }] },
-            { featureType: "poi.business", stylers: [{ visibility: "off" }] },
-            { featureType: "poi.attraction", stylers: [{ visibility: "off" }] },
-            { featureType: "administrative.land_parcel", stylers: [{ visibility: "off" }] }
-        ];
+    { featureType: "all", elementType: "labels", stylers: [{ visibility: "off" }] },
+    { featureType: "all", elementType: "geometry", stylers: [{ saturation: -100 }] },
+    
+    // ⭐ 핵심 수정: 3D 건물을 완전히 숨깁니다. ⭐
+    { featureType: "building", elementType: "geometry", stylers: [{ visibility: "off" }] },
+    // 지도를 더욱 깨끗하게 유지하기 위해 POI(장소 아이콘)도 숨깁니다. (선택 사항)
+    { featureType: "poi", elementType: "all", stylers: [{ visibility: "off" }] }
+];
 
         const BUILDING_CONFIGS = {
             'KYOBOCENTER': {
@@ -387,27 +382,10 @@
             const kyoboCenter = BUILDING_CONFIGS['KYOBOCENTER'].center;
 
             const map = new google.maps.Map(document.getElementById('map'), {
-                zoom: 17, center: kyoboCenter,
-
-                // 2D 고정: roadmap, tilt 0, WebGL/벡터 영향 최소화
-                mapTypeId: 'roadmap',
-                mapId: "",                      // 벡터 mapId 비우기 -> WebGL 벡터 지도 영향 억제
-                isFractionalZoomEnabled: false, // fractional zoom 비활성화
-                tilt: 0,
-                heading: 0,
-
-                // UI/컨트롤 관련: 회전/스트리트뷰 숨김
-                fullscreenControl: false,
-                rotateControl: false,
-                streetViewControl: false,
-                mapTypeControl: false,
-                gestureHandling: "greedy"
+                zoom: 17, center: kyoboCenter, mapTypeId: 'roadmap', tilt: 0 
             });
             mapInstance = map;
 
-            // 강제 tilt 0
-            if (typeof map.setTilt === 'function') map.setTilt(0);
-            
             const cleanMapType = new google.maps.StyledMapType(CLEAN_MAP_STYLE, { name: "Clean Map" });
             map.mapTypes.set('clean_map', cleanMapType);
             
@@ -520,3 +498,14 @@
         </script>
 </body>
 </html>
+
+
+
+
+
+
+
+
+
+
+
