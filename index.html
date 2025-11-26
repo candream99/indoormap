@@ -165,9 +165,14 @@
 
         // === 지도 스타일 및 데이터 정의 ===
         const CLEAN_MAP_STYLE = [
-            { featureType: "all", elementType: "labels", stylers: [{ visibility: "off" }] },
-            { featureType: "all", elementType: "geometry", stylers: [{ saturation: -100 }] }
-        ];
+    { featureType: "all", elementType: "labels", stylers: [{ visibility: "off" }] },
+    { featureType: "all", elementType: "geometry", stylers: [{ saturation: -100 }] },
+    
+    // ⭐ 핵심 수정: 3D 건물을 완전히 숨깁니다. ⭐
+    { featureType: "building", elementType: "geometry", stylers: [{ visibility: "off" }] },
+    // 지도를 더욱 깨끗하게 유지하기 위해 POI(장소 아이콘)도 숨깁니다. (선택 사항)
+    { featureType: "poi", elementType: "all", stylers: [{ visibility: "off" }] }
+];
 
         const BUILDING_CONFIGS = {
             'KYOBOCENTER': {
@@ -493,6 +498,7 @@
         </script>
 </body>
 </html>
+
 
 
 
