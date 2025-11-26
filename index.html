@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>교보빌딩 실내 지도 (층별 선택 기능 v2.0)</title>
+    <title>교보빌딩 실내 지도 (층별 선택 기능 v3.0 - 지연 해결)</title>
     <meta name="viewport" content="initial-scale=1.0, user-scalable=no">
     <meta charset="utf-8">
     <style>
@@ -49,9 +49,8 @@
 
     <script>
         let isIndoorModeActive = false;
-        // ⭐ 초기 currentFloorId를 null로 변경하여 첫 switchFloor 호출을 강제합니다.
-        let currentFloorId = null;      
-        let floorOverlays = {};
+        let currentFloorId = null;
+        let floorOverlays = {}; // GroundOverlay 객체를 저장
 
         const FLOOR_DATA = {
             "B2": {
@@ -88,11 +87,8 @@
         ];
 
         function switchFloor(newFloorId, map) {
-            // ⭐ 수정: currentFloorId가 null이면 실행을 강제합니다. (첫 진입 시)
-            if (currentFloorId === newFloorId) {
-                // 첫 진입이 아니면서 같은 층을 누르면 종료
-                if (currentFloorId !== null) return; 
-            }
+            // 이미 활성화된 층이면 종료 (첫 진입 시 null 처리)
+            if (currentFloorId === newFloorId && currentFloorId !== null) return;
 
             // 1. 이전 층 이미지 숨기기
             if (floorOverlays[currentFloorId]) {
@@ -100,21 +96,17 @@
             }
             
             currentFloorId = newFloorId;
-            const floor = FLOOR_DATA[newFloorId];
-
+            // ⭐ GroundOverlay가 이미 floorOverlays에 저장되어 있으므로, 새로 생성할 필요 없이 바로 사용합니다.
+            
             // 2. 새 층 이미지 표시
-            if (!floorOverlays[newFloorId]) {
-                floorOverlays[newFloorId] = new google.maps.GroundOverlay(
-                    floor.imageUrl, floor.imageBounds, { opacity: 0.8 }
-                );
+            if (floorOverlays[newFloorId]) {
+                floorOverlays[newFloorId].setMap(map);
             }
-            floorOverlays[newFloorId].setMap(map);
 
             // 3. 버튼 상태 업데이트
             document.querySelectorAll('.floor-button').forEach(btn => {
                 btn.classList.remove('active');
             });
-            // ⭐ 수정: 버튼이 DOM에 있는지 확인 후 활성화
             const activeBtn = document.getElementById(`btn-${newFloorId}`);
             if (activeBtn) {
                 activeBtn.classList.add('active');
@@ -166,13 +158,12 @@
                     // 실내 모드 진입
                     isIndoorModeActive = true;
                     
-                    // ⭐ 수정: currentFloorId를 강제로 null로 초기화하여 switchFloor('1F')를 실행하도록 보장
                     currentFloorId = null; 
                     
                     map.setMapTypeId('clean_map'); 
                     floorPicker.style.display = 'block';
                     
-                    // 1F 평면도 표시 및 버튼 활성화 (이제 이 호출은 이미지 로드를 확실하게 실행합니다.)
+                    // 1F 평면도 표시
                     switchFloor('1F', map); 
                     
                     buildingPolygon.setOptions({ fillOpacity: 0.0, strokeWeight: 4 });
@@ -184,13 +175,36 @@
                     if (floorOverlays[currentFloorId]) {
                         floorOverlays[currentFloorId].setMap(null);
                     }
-                    // ⭐ 수정: currentFloorId를 다시 '1F'로 설정하여 다음 진입을 준비
-                    currentFloorId = '1F'; 
+                    
+                    currentFloorId = null; // 다음 진입을 위해 null로 설정
                     
                     floorPicker.style.display = 'none';
                     map.setMapTypeId('roadmap');
                     buildingPolygon.setOptions({ strokeWeight: 2, fillOpacity: 0.0 });
                 }
+            });
+            
+            // ⭐⭐⭐ 7. 모든 층의 이미지 사전 로딩 (Pre-loading) 로직 ⭐⭐⭐
+            Object.keys(FLOOR_DATA).forEach(floorId => {
+                const floor = FLOOR_DATA[floorId];
+
+                // GroundOverlay 객체 생성 및 floorOverlays에 저장
+                const overlay = new google.maps.GroundOverlay(
+                    floor.imageUrl, floor.imageBounds, { opacity: 0.8 }
+                );
+                
+                // 생성된 오버레이를 맵에 연결하여 이미지 다운로드를 트리거합니다.
+                overlay.setMap(map); 
+                
+                // ⭐ 중요: 다운로드를 시작한 후 즉시 숨깁니다.
+                overlay.setMap(null); 
+                
+                floorOverlays[floorId] = overlay;
+                
+                // (옵션) 디버깅을 위해 로딩 완료 확인 콘솔 출력
+                google.maps.event.addListener(overlay, 'loaded', function() {
+                    console.log(`✅ ${floorId} 이미지 사전 로딩 완료.`);
+                });
             });
         }
     </script>
