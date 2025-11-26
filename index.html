@@ -165,7 +165,9 @@
 
         // === 지도 스타일 및 데이터 정의 ===
         const CLEAN_MAP_STYLE = [
-            { featureType: "all", elementType: "labels", stylers: [{ visibility: "off" }] },
+           { featureType: "building", elementType: "geometry", stylers: [{ visibility: "off" }] },
+    { featureType: "building", elementType: "labels", stylers: [{ visibility: "off" }] },
+    { featureType: "poi", elementType: "all", stylers: [{ visibility: "off" }] }, { featureType: "all", elementType: "labels", stylers: [{ visibility: "off" }] },
             { featureType: "all", elementType: "geometry", stylers: [{ saturation: -100 }] }
         ];
 
@@ -500,5 +502,6 @@ mapInstance = map;
         </script>
 </body>
 </html>
+
 
 
