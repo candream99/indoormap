@@ -165,9 +165,7 @@
 
         // === 지도 스타일 및 데이터 정의 ===
         const CLEAN_MAP_STYLE = [
-           { featureType: "building", elementType: "geometry", stylers: [{ visibility: "off" }] },
-    { featureType: "building", elementType: "labels", stylers: [{ visibility: "off" }] },
-    { featureType: "poi", elementType: "all", stylers: [{ visibility: "off" }] }, { featureType: "all", elementType: "labels", stylers: [{ visibility: "off" }] },
+            { featureType: "all", elementType: "labels", stylers: [{ visibility: "off" }] },
             { featureType: "all", elementType: "geometry", stylers: [{ saturation: -100 }] }
         ];
 
@@ -379,16 +377,9 @@
             const kyoboCenter = BUILDING_CONFIGS['KYOBOCENTER'].center;
 
             const map = new google.maps.Map(document.getElementById('map'), {
-    zoom: 17, 
-    center: kyoboCenter, 
-    mapTypeId: 'roadmap', 
-    tilt: 0,
-    heading: 0,
-    
-    // ⭐⭐ 핵심 수정: WebGL(3D) 렌더링을 비활성화하고 래스터(2D 이미지) 모드를 강제합니다. ⭐⭐
-    renderingType: google.maps.RenderingType.RASTER 
-});
-mapInstance = map;
+                zoom: 17, center: kyoboCenter, mapTypeId: 'roadmap' 
+            });
+            mapInstance = map;
 
             const cleanMapType = new google.maps.StyledMapType(CLEAN_MAP_STYLE, { name: "Clean Map" });
             map.mapTypes.set('clean_map', cleanMapType);
@@ -502,6 +493,5 @@ mapInstance = map;
         </script>
 </body>
 </html>
-
 
 
