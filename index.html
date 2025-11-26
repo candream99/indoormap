@@ -1,9 +1,12 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>교보빌딩 실내 지도 (층별 선택 기능 v3.0 - 지연 해결)</title>
+    <title>교보빌딩 실내 지도 (최종 통합본)</title>
     <meta name="viewport" content="initial-scale=1.0, user-scalable=no">
     <meta charset="utf-8">
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
     <style>
         html, body {
             height: 100%;
@@ -13,17 +16,25 @@
         #map {
             height: 100%;
         }
-        /* 층 선택 버튼 스타일 */
+        
+        /* ⭐ 지도 기본 컨트롤(지도/위성 등) 숨기기 ⭐ */
+        .gmnoprint:not(#floor-picker),
+        .gm-style-cc,
+        .gm-svpc {
+            display: none !important;
+        }
+
+        /* 층 선택 버튼 스타일 (좌측 하단) */
         #floor-picker {
             position: absolute;
             bottom: 20px;
             left: 20px;
-            z-index: 999;
+            z-index: 999; 
             background-color: white;
             border-radius: 4px;
             padding: 5px;
             box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-            display: none;
+            display: none; 
         }
         .floor-button {
             display: block;
@@ -41,16 +52,101 @@
             color: white;
             border-color: #4285F4;
         }
+
+        /* ⭐ 무장애 정보 버튼 컨테이너 스타일 (우측 상단, 지도 컨트롤 자리) ⭐ */
+        #accessibility-button-container {
+            position: absolute;
+            top: 10px; 
+            right: 10px;
+            z-index: 999;
+            display: none; /* 초기에는 숨김 */
+        }
+        #accessibility-button {
+            background-color: #fff;
+            border: 0;
+            border-radius: 2px;
+            box-shadow: 0 1px 4px -1px rgba(0, 0, 0, 0.3);
+            padding: 8px 12px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            color: #333;
+        }
+
+        /* ⭐ 무장애 정보 팝업창 스타일 ⭐ */
+        #accessibility-popup {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 1000; 
+            width: 350px;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+            display: none; /* 초기에는 숨김 */
+            padding: 20px;
+            overflow-y: auto;
+        }
+        #popup-close-btn {
+            position: absolute;
+            top: 10px;
+            right: 15px; /* X 버튼을 오른쪽으로 조금 이동 */
+            font-size: 24px;
+            cursor: pointer;
+            color: #777;
+            font-weight: 300;
+            line-height: 1;
+        }
+        /* 무장애 시설 정보 내부 스타일 */
+        .accessibility-title {
+            font-size: 1.2rem;
+            font-weight: 700;
+            margin-bottom: 15px;
+            color: #1e3a8a;
+        }
+        .accessibility-item {
+            display: flex; 
+            align-items: center;
+            margin-bottom: 10px;
+            font-size: 1rem;
+        }
+        .accessibility-item i {
+            width: 24px; 
+            text-align: center;
+            margin-right: 10px;
+            color: #2563eb;
+        }
+        .accessibility-status {
+            margin-left: auto; 
+            font-weight: 600;
+        }
+        .status-yes {
+            color: #10b981; /* 초록색 */
+        }
+        .status-no {
+            color: #ef4444; /* 빨간색 */
+        }
     </style>
 </head>
 <body>
     <div id="map"></div>
     <div id="floor-picker"></div>
+    
+    <div id="accessibility-button-container">
+        <button id="accessibility-button">무장애 시설정보</button>
+    </div>
+
+    <div id="accessibility-popup">
+        <span id="popup-close-btn">×</span>
+        <div id="popup-content">
+            </div>
+    </div>
 
     <script>
         let isIndoorModeActive = false;
         let currentFloorId = null;
-        let floorOverlays = {}; // GroundOverlay 객체를 저장
+        let floorOverlays = {}; 
 
         const FLOOR_DATA = {
             "B2": {
@@ -85,25 +181,74 @@
             { featureType: "all", elementType: "labels", stylers: [{ visibility: "off" }] },
             { featureType: "all", elementType: "geometry", stylers: [{ saturation: -100 }] }
         ];
+        
+        // 무장애 시설 정보 데이터
+        const ACCESSIBILITY_DATA = {
+            ramp: true,          
+            disabledToilet: true, 
+            braille: true,       
+            elevator: true,      
+            stepFree: false      
+        };
+
+        /**
+         * 무장애 시설 정보 HTML을 생성합니다.
+         */
+        function generateAccessibilityHTML(data) {
+            const getStatus = (key) => ({
+                text: data[key] ? '있음' : '없음',
+                class: data[key] ? 'status-yes' : 'status-no'
+            });
+            // 주출입구 단차는 false일 때 '있음' (단차 있음)이므로 텍스트를 반전
+            const stepFreeText = data.stepFree ? '없음' : '있음';
+            const stepFreeClass = data.stepFree ? 'status-yes' : 'status-no';
+
+            return `
+                <div class="accessibility-info">
+                    <div class="accessibility-title">무장애 시설 정보</div>
+                    <div class="accessibility-item">
+                        <i class="fas fa-wheelchair"></i>
+                        <span>주출입구 경사로</span>
+                        <span class="accessibility-status ${getStatus('ramp').class}">${getStatus('ramp').text}</span>
+                    </div>
+                    <div class="accessibility-item">
+                        <i class="fas fa-restroom"></i>
+                        <span>장애인 화장실</span>
+                        <span class="accessibility-status ${getStatus('disabledToilet').class}">${getStatus('disabledToilet').text}</span>
+                    </div>
+                    <div class="accessibility-item">
+                        <i class="fas fa-braille"></i>
+                        <span>점자블록</span>
+                        <span class="accessibility-status ${getStatus('braille').class}">${getStatus('braille').text}</span>
+                    </div>
+                    <div class="accessibility-item">
+                        <i class="fas fa-elevator"></i>
+                        <span>엘리베이터</span>
+                        <span class="accessibility-status ${getStatus('elevator').class}">${getStatus('elevator').text}</span>
+                    </div>
+                    <div class="accessibility-item">
+                        <i class="fas fa-accessible-icon"></i>
+                        <span>주출입구 단차</span>
+                        <span class="accessibility-status ${stepFreeClass}">${stepFreeText}</span>
+                    </div>
+                </div>
+            `;
+        }
 
         function switchFloor(newFloorId, map) {
-            // 이미 활성화된 층이면 종료 (첫 진입 시 null 처리)
             if (currentFloorId === newFloorId && currentFloorId !== null) return;
 
-            // 1. 이전 층 이미지 숨기기
             if (floorOverlays[currentFloorId]) {
                 floorOverlays[currentFloorId].setMap(null);
             }
             
             currentFloorId = newFloorId;
-            // ⭐ GroundOverlay가 이미 floorOverlays에 저장되어 있으므로, 새로 생성할 필요 없이 바로 사용합니다.
-            
-            // 2. 새 층 이미지 표시
+            const floor = FLOOR_DATA[newFloorId];
+
             if (floorOverlays[newFloorId]) {
                 floorOverlays[newFloorId].setMap(map);
             }
 
-            // 3. 버튼 상태 업데이트
             document.querySelectorAll('.floor-button').forEach(btn => {
                 btn.classList.remove('active');
             });
@@ -134,7 +279,21 @@
                 zIndex: 10, map: map
             });
 
+            // 5. DOM 요소 참조 및 이벤트 연결
             const floorPicker = document.getElementById('floor-picker');
+            const accessBtnContainer = document.getElementById('accessibility-button-container');
+            const accessButton = document.getElementById('accessibility-button');
+            const accessPopup = document.getElementById('accessibility-popup');
+            const closeBtn = document.getElementById('popup-close-btn');
+            
+            // 팝업 내용 채우기
+            document.getElementById('popup-content').innerHTML = generateAccessibilityHTML(ACCESSIBILITY_DATA);
+            
+            // 팝업 버튼 이벤트 설정
+            accessButton.onclick = () => { accessPopup.style.display = 'block'; };
+            closeBtn.onclick = () => { accessPopup.style.display = 'none'; };
+
+            // 층 선택 버튼 생성
             Object.keys(FLOOR_DATA).reverse().forEach(floorId => { 
                 const btn = document.createElement('button');
                 btn.textContent = FLOOR_DATA[floorId].name;
@@ -157,13 +316,14 @@
                 if (!isIndoorModeActive) {
                     // 실내 모드 진입
                     isIndoorModeActive = true;
-                    
                     currentFloorId = null; 
                     
                     map.setMapTypeId('clean_map'); 
-                    floorPicker.style.display = 'block';
                     
-                    // 1F 평면도 표시
+                    // ⭐ 층 선택기와 무장애 시설 버튼 표시 ⭐
+                    floorPicker.style.display = 'block';
+                    accessBtnContainer.style.display = 'block'; 
+
                     switchFloor('1F', map); 
                     
                     buildingPolygon.setOptions({ fillOpacity: 0.0, strokeWeight: 4 });
@@ -171,40 +331,34 @@
                     // 실내 모드 종료
                     isIndoorModeActive = false;
 
-                    // 현재 활성화된 이미지 숨김
                     if (floorOverlays[currentFloorId]) {
                         floorOverlays[currentFloorId].setMap(null);
                     }
                     
-                    currentFloorId = null; // 다음 진입을 위해 null로 설정
+                    currentFloorId = null; 
                     
+                    // ⭐ 층 선택기, 버튼, 팝업 숨김 ⭐
                     floorPicker.style.display = 'none';
+                    accessBtnContainer.style.display = 'none'; 
+                    accessPopup.style.display = 'none'; // 팝업 강제 종료
+
                     map.setMapTypeId('roadmap');
                     buildingPolygon.setOptions({ strokeWeight: 2, fillOpacity: 0.0 });
                 }
             });
             
-            // ⭐⭐⭐ 7. 모든 층의 이미지 사전 로딩 (Pre-loading) 로직 ⭐⭐⭐
+            // 모든 층의 이미지 사전 로딩 (Pre-loading) 로직
             Object.keys(FLOOR_DATA).forEach(floorId => {
                 const floor = FLOOR_DATA[floorId];
 
-                // GroundOverlay 객체 생성 및 floorOverlays에 저장
                 const overlay = new google.maps.GroundOverlay(
                     floor.imageUrl, floor.imageBounds, { opacity: 0.8 }
                 );
                 
-                // 생성된 오버레이를 맵에 연결하여 이미지 다운로드를 트리거합니다.
                 overlay.setMap(map); 
-                
-                // ⭐ 중요: 다운로드를 시작한 후 즉시 숨깁니다.
                 overlay.setMap(null); 
                 
                 floorOverlays[floorId] = overlay;
-                
-                // (옵션) 디버깅을 위해 로딩 완료 확인 콘솔 출력
-                google.maps.event.addListener(overlay, 'loaded', function() {
-                    console.log(`✅ ${floorId} 이미지 사전 로딩 완료.`);
-                });
             });
         }
     </script>
