@@ -3,12 +3,23 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>월드메디 3D 가상 투어 (충돌 감지 적용)</title>
+    <title>월드메디 3D 가상 투어</title>
     <style>
-        body { margin: 0; overflow: hidden; background-color: #000; user-select: none; }
-        #overlay {
+        body { margin: 0; overflow: hidden; background-color: #000; user-select: none; font-family: sans-serif; }
+        
+        /* 로딩 화면 스타일 */
+        #loading {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             display: flex; flex-direction: column; align-items: center; justify-content: center;
+            color: #00ff00; background: #000; z-index: 20;
+            font-size: 24px; font-weight: bold;
+        }
+
+        /* 시작 안내 화면 스타일 (처음엔 숨김) */
+        #overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: none; /* 로딩 완료 전까지 숨김 */
+            flex-direction: column; align-items: center; justify-content: center;
             color: white; background: rgba(0,0,0,0.7); z-index: 10; cursor: pointer;
             text-align: center;
         }
@@ -17,10 +28,14 @@
     </style>
 </head>
 <body>
+    <div id="loading">
+        <p>모델 다운로드 및 물리 엔진 준비 중...</p>
+        <p style="font-size:14px; color:#666;">(잠시만 기다려 주세요)</p>
+    </div>
+
     <div id="overlay">
-        <h1>화면을 클릭하여 시작하세요</h1>
+        <h1>로딩 완료! 화면을 클릭하세요</h1>
         <p>W, A, S, D: 이동 | 마우스: 시선 전환 | ESC: 종료</p>
-        <p style="margin-top: 20px; color: #aaa;">(이제 벽을 통과할 수 없습니다)</p>
     </div>
 
     <script type="importmap">
@@ -38,7 +53,7 @@
         import { Octree } from 'three/addons/math/Octree.js';
         import { Capsule } from 'three/addons/math/Capsule.js';
 
-        // --- 전역 변수 설정 ---
+        // --- 전역 변수 ---
         const clock = new THREE.Clock();
         const scene = new THREE.Scene();
         scene.background = new THREE.Color(0x88ccee);
@@ -47,8 +62,11 @@
         const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
         camera.rotation.order = 'YXZ';
 
-        // 조명 설정 (전체적으로 밝게)
-        const fillLight = new THREE.HemisphereLight(0xffffff, 0x888888, 2); // 밝기 높임
+        // ★ 로딩 상태 확인용 플래그 (이게 핵심!)
+        let isModelLoaded = false;
+
+        // 조명 설정
+        const fillLight = new THREE.HemisphereLight(0xffffff, 0x888888, 2);
         fillLight.position.set(2, 1, 1);
         scene.add(fillLight);
 
@@ -62,38 +80,36 @@
         renderer.shadowMap.enabled = true;
         document.body.appendChild(renderer.domElement);
 
-        // --- 물리 및 충돌 관련 변수 ---
-        const GRAVITY = 30; // 중력 가속도
-        const STEPS_PER_FRAME = 5; // 물리 계산 정밀도 (높을수록 벽 뚫림 방지)
+        // --- 물리 엔진 변수 ---
+        const GRAVITY = 30;
+        const STEPS_PER_FRAME = 5;
         
-        // Octree: 건물 전체의 충돌 데이터
         const worldOctree = new Octree();
-        
-        // Capsule: 플레이어의 몸 (시작위치: x=0, y=5, z=0 / 반지름: 0.35 / 키: 1.35 + 0.35*2)
+        // 플레이어: 반지름 0.35, 전체 높이 약 1.7m (시작 위치 y=5 에서 떨어뜨려봄)
         const playerCollider = new Capsule(new THREE.Vector3(0, 0.35, 0), new THREE.Vector3(0, 1.35, 0), 0.35);
         
         const playerVelocity = new THREE.Vector3();
         const playerDirection = new THREE.Vector3();
         let playerOnFloor = false;
-
-        // 키 입력 상태
         const keyStates = {};
 
         // --- 이벤트 리스너 ---
         document.addEventListener('keydown', (event) => { keyStates[event.code] = true; });
         document.addEventListener('keyup', (event) => { keyStates[event.code] = false; });
         
-        document.body.addEventListener('mousedown', () => {
+        const overlay = document.getElementById('overlay');
+        
+        // 클릭 시 포인터 잠금 (게임 시작)
+        overlay.addEventListener('click', () => {
             document.body.requestPointerLock();
         });
-        
-        // Pointer Lock 상태 변화에 따른 오버레이 처리
+
         document.addEventListener('pointerlockchange', () => {
-             const overlay = document.getElementById('overlay');
              if (document.pointerLockElement === document.body) {
                  overlay.style.display = 'none';
              } else {
-                 overlay.style.display = 'flex';
+                 // 로딩이 끝난 상태에서만 메뉴를 다시 보여줌
+                 if(isModelLoaded) overlay.style.display = 'flex';
              }
         });
 
@@ -112,47 +128,48 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
         }
 
-        // --- 모델 로드 (가장 중요한 부분) ---
+        // --- 모델 로드 (핵심 수정 부분) ---
         const loader = new GLTFLoader();
         
-        // ★★★ 여기에 본인의 파일명을 넣으세요 ★★★
-        loader.load('model.glb', (gltf) => {
+        loader.load('model.glb', (gltf) => { // 파일명 확인!
             scene.add(gltf.scene);
 
-            // 모델의 모든 메쉬를 순회하며 그림자 및 충돌 데이터 생성
+            // 그림자 설정
             gltf.scene.traverse(child => {
                 if (child.isMesh) {
                     child.castShadow = true;
                     child.receiveShadow = true;
-                    
-                    // 충돌 계산을 위해 라이트맵이나 투명한 물체는 제외할 수도 있음
-                    if (child.material.map) {
-                        child.material.map.anisotropy = 4;
-                    }
                 }
             });
 
-            // ★ Octree에 모델 데이터 입력 (이제부터 벽이 됩니다)
+            // ★ Octree 생성 (벽 데이터 입력)
             worldOctree.fromGraphNode(gltf.scene);
             
-            console.log("모델 로드 및 충돌 데이터 생성 완료");
+            // ★ 로딩 완료 처리
+            isModelLoaded = true; 
+            console.log("모델 로딩 완료! 중력 활성화.");
 
-        }, undefined, (error) => {
-            console.error(error);
+            // 로딩 화면 끄고, 시작 화면 켜기
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('overlay').style.display = 'flex';
+
+        }, (xhr) => {
+            // 진행률 표시 (콘솔)
+            console.log((xhr.loaded / xhr.total * 100) + '% loaded');
+        }, (error) => {
+            console.error('모델 로드 에러:', error);
         });
 
 
-        // --- 물리 엔진 로직 ---
+        // --- 물리 로직 ---
         function playerCollisions() {
             const result = worldOctree.capsuleIntersect(playerCollider);
             playerOnFloor = false;
-
             if (result) {
                 playerOnFloor = result.normal.y > 0;
                 if (!playerOnFloor) {
                     playerVelocity.addScaledVector(result.normal, -result.normal.dot(playerVelocity));
                 }
-                // 충돌한 깊이만큼 밀어냄
                 playerCollider.translate(result.normal.multiplyScalar(result.depth));
             }
         }
@@ -161,15 +178,13 @@
             let damping = Math.exp(-4 * deltaTime) - 1;
             if (!playerOnFloor) {
                 playerVelocity.y -= GRAVITY * deltaTime;
-                damping *= 0.1; // 공중에서는 마찰력 감소
+                damping *= 0.1;
             }
-
             playerVelocity.addScaledVector(playerVelocity, damping);
             const deltaPosition = playerVelocity.clone().multiplyScalar(deltaTime);
             playerCollider.translate(deltaPosition);
 
             playerCollisions();
-
             camera.position.copy(playerCollider.end);
         }
 
@@ -189,44 +204,33 @@
         }
 
         function controls(deltaTime) {
-            // 이동 속도 설정 (걷기: 15, 달리기: 30)
             const speedDelta = deltaTime * (playerOnFloor ? 25 : 8);
-
-            if (keyStates['KeyW']) {
-                playerVelocity.add(getForwardVector().multiplyScalar(speedDelta));
-            }
-            if (keyStates['KeyS']) {
-                playerVelocity.add(getForwardVector().multiplyScalar(-speedDelta));
-            }
-            if (keyStates['KeyA']) {
-                playerVelocity.add(getSideVector().multiplyScalar(-speedDelta));
-            }
-            if (keyStates['KeyD']) {
-                playerVelocity.add(getSideVector().multiplyScalar(speedDelta));
-            }
+            if (keyStates['KeyW']) playerVelocity.add(getForwardVector().multiplyScalar(speedDelta));
+            if (keyStates['KeyS']) playerVelocity.add(getForwardVector().multiplyScalar(-speedDelta));
+            if (keyStates['KeyA']) playerVelocity.add(getSideVector().multiplyScalar(-speedDelta));
+            if (keyStates['KeyD']) playerVelocity.add(getSideVector().multiplyScalar(speedDelta));
         }
 
-        // --- 텔레포트 (낙하 방지) ---
         function teleportPlayerIfOob() {
             if (camera.position.y <= -25) {
+                playerVelocity.set(0, 0, 0);
                 playerCollider.start.set(0, 0.35, 0);
                 playerCollider.end.set(0, 1.35, 0);
-                playerCollider.radius = 0.35;
                 camera.position.copy(playerCollider.end);
-                camera.rotation.set(0, 0, 0);
-                playerVelocity.set(0, 0, 0);
             }
         }
 
-        // --- 메인 루프 ---
+        // --- 애니메이션 루프 ---
         function animate() {
             const deltaTime = Math.min(0.05, clock.getDelta()) / STEPS_PER_FRAME;
 
-            // 물리 계산의 정밀도를 위해 한 프레임을 여러 번 쪼개서 계산
             for (let i = 0; i < STEPS_PER_FRAME; i++) {
-                controls(deltaTime);
-                updatePlayer(deltaTime);
-                teleportPlayerIfOob();
+                // ★ 수정된 부분: 모델 로딩이 끝난 후에만 물리 엔진(중력) 작동
+                if (isModelLoaded) {
+                    controls(deltaTime);
+                    updatePlayer(deltaTime);
+                    teleportPlayerIfOob();
+                }
             }
 
             renderer.render(scene, camera);
